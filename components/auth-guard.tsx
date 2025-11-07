@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 
 interface AuthGuardProps {
   children: React.ReactNode
@@ -10,10 +11,23 @@ interface AuthGuardProps {
 
 export function AuthGuard({ children }: AuthGuardProps) {
   const [isLoading, setIsLoading] = useState(true)
+  const router = useRouter()
 
   useEffect(() => {
+    const userData = localStorage.getItem("user")
+    if (!userData) {
+      router.push("/auth")
+      return
+    }
+
+    const user = JSON.parse(userData)
+    if (!user.isAuthenticated) {
+      router.push("/auth")
+      return
+    }
+
     setIsLoading(false)
-  }, [])
+  }, [router])
 
   if (isLoading) {
     return (

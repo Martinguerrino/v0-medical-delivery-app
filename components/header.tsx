@@ -25,6 +25,7 @@ export function Header() {
   const router = useRouter()
 
   useEffect(() => {
+    // Check for user in localStorage on component mount
     const userData = localStorage.getItem("user")
     if (userData) {
       const parsedUser = JSON.parse(userData)
@@ -82,30 +83,41 @@ export function Header() {
 
           <div className="flex items-center gap-4">
             {user ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="secondary" size="sm" className="hidden md:flex">
-                    <User className="h-4 w-4 mr-2" />
-                    {getUserDisplayName()}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem>
-                    <User className="h-4 w-4 mr-2" />
-                    Perfil
-                  </DropdownMenuItem>
-                  <DropdownMenuItem>
-                    <span className="text-xs text-muted-foreground">Rol: {user.role}</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
-                    <LogOut className="h-4 w-4 mr-2" />
-                    Cerrar Sesión
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleLogout}
+                  className="text-destructive border-destructive hover:bg-destructive hover:text-destructive-foreground"
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Cerrar Sesión
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="secondary" size="sm" className="hidden md:flex">
+                      <User className="h-4 w-4 mr-2" />
+                      {getUserDisplayName()}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem>
+                      <User className="h-4 w-4 mr-2" />
+                      Perfil
+                    </DropdownMenuItem>
+                    <DropdownMenuItem>
+                      <span className="text-xs text-muted-foreground">Rol: {user.role}</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
+                      <LogOut className="h-4 w-4 mr-2" />
+                      Cerrar Sesión
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
             ) : (
               <Link href="/auth">
                 <Button variant="secondary" size="sm" className="hidden md:flex">

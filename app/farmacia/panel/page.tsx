@@ -125,7 +125,7 @@ export default function FarmaciaPanelPage() {
               <Button className="w-full bg-transparent" variant="outline">
                 Ver Pedidos Pendientes
               </Button>
-              <Button className="w-full bg-transparent" variant="outline">
+              <Button className="w-full bg-transparent" variant="outline" onClick={() => router.push("/farmacia/panel/inventario")}>
                 Gestionar Inventario
               </Button>
               <Button className="w-full bg-transparent" variant="outline">
