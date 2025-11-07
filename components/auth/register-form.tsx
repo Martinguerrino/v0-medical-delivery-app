@@ -11,7 +11,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Eye, EyeOff, Mail, Lock, User, Phone, MapPin, Building, FileText } from "lucide-react"
 import type { UserRole } from "@/lib/types/user-types"
-import { registerUser } from "@/lib/data/users-db"
 
 interface RegisterFormProps {
   onToggleMode: () => void
@@ -114,9 +113,16 @@ export function RegisterForm({ onToggleMode, onRegister }: RegisterFormProps) {
       return
     }
 
-    // Simulate API call
-    setTimeout(() => {
-      const result = registerUser(userData)
+    try {
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(userData),
+      })
+
+      const result = await response.json()
 
       if (result.success) {
         setSuccess(`¡Bienvenido! Tu cuenta de ${selectedRole} ha sido creada exitosamente`)
@@ -126,9 +132,12 @@ export function RegisterForm({ onToggleMode, onRegister }: RegisterFormProps) {
       } else {
         setError(result.message)
       }
-
+    } catch (error) {
+      console.error("Error registering user:", error)
+      setError("Error al crear la cuenta. Inténtalo de nuevo.")
+    } finally {
       setIsLoading(false)
-    }, 1000)
+    }
   }
 
   return (
