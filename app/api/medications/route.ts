@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { medicationStatements, medicationPriceStatements } from '@/lib/database'
+import { medicationStatements, medicationPriceStatements, inventoryStatements } from '@/lib/database'
 
 export async function GET(request: NextRequest) {
   try {
@@ -7,24 +7,15 @@ export async function GET(request: NextRequest) {
     const pharmacyId = searchParams.get('pharmacyId')
 
     if (pharmacyId) {
-      // Get medications available in this pharmacy
-      const pharmacyMeds = medicationPriceStatements.getAll.all()
-        .filter((price: any) => price.pharmacyId === pharmacyId)
-        .map((price: any) => {
-          const medication = medicationStatements.getById.get(price.medicationId)
-          if (medication) {
-            return {
-              ...medication,
-              price: price.price,
-              discountedPrice: price.discountedPrice,
-              inStock: price.inStock,
-              stock: price.inStock ? 10 : 0, // Simulate stock
-              pharmacyPriceId: price.id,
-            }
-          }
-          return null
-        })
-        .filter((med: any) => med !== null)
+      // Get medications available in this pharmacy using inventory table
+      const inventoryItems = inventoryStatements.getInventoryWithDetails.all(pharmacyId)
+      const pharmacyMeds = inventoryItems.map((item: any) => ({
+        ...item,
+        id: item.medicationId,
+        price: item.precio,
+        inStock: item.stock > 0,
+        pharmacyPriceId: item.id,
+      }))
       return NextResponse.json(pharmacyMeds)
     } else {
       // Get all medications (for admin/general view)
@@ -87,24 +78,23 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // Check if price already exists for this pharmacy
-      const existingPrices = medicationPriceStatements.getByMedicationId.all(medicationId)
-      const existingPrice = existingPrices.find((price: any) => price.pharmacyId === pharmacyId)
+      // Check if already exists in inventory
+      const existingInventory = inventoryStatements.getByPharmacyId.all(pharmacyId)
+      const existingItem = existingInventory.find((item: any) => item.medicationId === medicationId)
 
-      if (existingPrice) {
+      if (existingItem) {
         return NextResponse.json(
           { error: 'Medication already exists in this pharmacy inventory' },
           { status: 400 }
         )
       }
 
-      // Insert medication price for this pharmacy
-      medicationPriceStatements.insert.run(
-        medicationId,
+      // Insert into inventory
+      inventoryStatements.insert.run(
         pharmacyId,
+        medicationId,
         price,
-        discountedPrice || null,
-        inStock !== undefined ? inStock : true,
+        inStock !== undefined ? inStock : 10, // Default stock
         new Date().toISOString()
       )
 
@@ -114,8 +104,8 @@ export async function POST(request: NextRequest) {
         medication: {
           ...medication,
           price,
-          discountedPrice,
-          inStock: inStock !== undefined ? inStock : true,
+          stock: inStock !== undefined ? inStock : 10,
+          inStock: (inStock !== undefined ? inStock : 10) > 0,
         }
       })
     }
@@ -128,13 +118,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Generate new ID (simple increment)
-    const existingMeds = medicationStatements.getAll.all()
-    const newId = existingMeds.length > 0 ? Math.max(...existingMeds.map((m: any) => m.id)) + 1 : 1
-
-    // Insert medication
-    medicationStatements.insert.run(
-      newId,
+    // Insert medication (id will auto-increment)
+    const insertResult = medicationStatements.insert.run(
+      null, // id will auto-increment
       name,
       genericName || '',
       brand || '',
@@ -144,16 +130,19 @@ export async function POST(request: NextRequest) {
       dosage || '',
       presentation || '',
       activeIngredient || '',
-      laboratory || ''
+      laboratory || '',
+      price
     )
 
+    // Get the inserted medication id
+    const newMedicationId = insertResult.lastInsertRowid
+
     // Add to pharmacy inventory
-    medicationPriceStatements.insert.run(
-      newId,
+    inventoryStatements.insert.run(
       pharmacyId,
+      newMedicationId,
       price,
-      discountedPrice || null,
-      inStock !== undefined ? inStock : true,
+      inStock !== undefined ? inStock : 10, // Default stock
       new Date().toISOString()
     )
 
@@ -161,7 +150,7 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'Medication created and added to pharmacy inventory',
       medication: {
-        id: newId,
+        id: newMedicationId,
         name,
         genericName,
         brand,
@@ -174,7 +163,8 @@ export async function POST(request: NextRequest) {
         laboratory,
         price,
         discountedPrice,
-        inStock: inStock !== undefined ? inStock : true,
+        stock: inStock !== undefined ? inStock : 10,
+        inStock: (inStock !== undefined ? inStock : 10) > 0,
       }
     })
   } catch (error) {

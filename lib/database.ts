@@ -145,6 +145,7 @@ db.exec(`
     price REAL NOT NULL,
     discountedPrice REAL,
     inStock BOOLEAN NOT NULL,
+    stock INTEGER NOT NULL DEFAULT 0,
     lastUpdated TEXT NOT NULL,
     FOREIGN KEY (medicationId) REFERENCES medications(id),
     FOREIGN KEY (pharmacyId) REFERENCES pharmacies(id)
@@ -194,6 +195,19 @@ db.exec(`
     birthDate TEXT NOT NULL,
     preferences TEXT NOT NULL, -- JSON string
     orderHistory TEXT NOT NULL -- JSON string
+  );
+
+  -- Inventory table
+  CREATE TABLE IF NOT EXISTS inventory (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pharmacyId TEXT NOT NULL,
+    medicationId INTEGER NOT NULL,
+    precio REAL NOT NULL,
+    stock INTEGER NOT NULL,
+    lastUpdated TEXT NOT NULL,
+    FOREIGN KEY (pharmacyId) REFERENCES pharmacies(id),
+    FOREIGN KEY (medicationId) REFERENCES medications(id),
+    UNIQUE(pharmacyId, medicationId)
   );
 `);
 
@@ -292,8 +306,8 @@ export const pharmacyStatements = {
 // Prepared statements for medications
 export const medicationStatements = {
   insert: db.prepare(`
-    INSERT INTO medications (id, name, genericName, brand, category, requiresPrescription, description, dosage, presentation, activeIngredient, laboratory)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO medications (id, name, genericName, brand, category, requiresPrescription, description, dosage, presentation, activeIngredient, laboratory, price)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `),
   getAll: db.prepare('SELECT * FROM medications'),
   getById: db.prepare('SELECT * FROM medications WHERE id = ?'),
@@ -308,14 +322,14 @@ export const medicationStatements = {
 // Prepared statements for medication prices
 export const medicationPriceStatements = {
   insert: db.prepare(`
-    INSERT INTO medication_prices (medicationId, pharmacyId, price, discountedPrice, inStock, lastUpdated)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO medication_prices (medicationId, pharmacyId, price, discountedPrice, inStock, stock, lastUpdated)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `),
   getByMedicationId: db.prepare('SELECT * FROM medication_prices WHERE medicationId = ?'),
   getAll: db.prepare('SELECT * FROM medication_prices'),
   update: db.prepare(`
     UPDATE medication_prices SET
-      price = ?, discountedPrice = ?, inStock = ?, lastUpdated = ?
+      price = ?, discountedPrice = ?, inStock = ?, stock = ?, lastUpdated = ?
     WHERE medicationId = ? AND pharmacyId = ?
   `),
   delete: db.prepare('DELETE FROM medication_prices WHERE medicationId = ? AND pharmacyId = ?'),
@@ -369,6 +383,30 @@ export const testUserStatements = {
     WHERE id = ?
   `),
   delete: db.prepare('DELETE FROM test_users WHERE id = ?'),
+};
+
+// Prepared statements for inventory
+export const inventoryStatements = {
+  insert: db.prepare(`
+    INSERT OR REPLACE INTO inventory (pharmacyId, medicationId, precio, stock, lastUpdated)
+    VALUES (?, ?, ?, ?, ?)
+  `),
+  getByPharmacyId: db.prepare('SELECT * FROM inventory WHERE pharmacyId = ?'),
+  getByMedicationId: db.prepare('SELECT * FROM inventory WHERE medicationId = ?'),
+  getAll: db.prepare('SELECT * FROM inventory'),
+  update: db.prepare(`
+    UPDATE inventory SET
+      precio = ?, stock = ?, lastUpdated = ?
+    WHERE pharmacyId = ? AND medicationId = ?
+  `),
+  delete: db.prepare('DELETE FROM inventory WHERE pharmacyId = ? AND medicationId = ?'),
+  getInventoryWithDetails: db.prepare(`
+    SELECT i.*, m.name, m.genericName, m.brand, m.category, m.requiresPrescription, m.description, m.dosage, m.presentation, m.activeIngredient, m.laboratory, p.name as pharmacyName
+    FROM inventory i
+    JOIN medications m ON i.medicationId = m.id
+    JOIN pharmacies p ON i.pharmacyId = p.id
+    WHERE i.pharmacyId = ?
+  `),
 };
 
 // Migration functions
@@ -543,6 +581,7 @@ export const migrateData = () => {
           price.price,
           price.discountedPrice || null,
           price.inStock ? 1 : 0,
+          price.stock || 0,
           price.lastUpdated
         );
       }

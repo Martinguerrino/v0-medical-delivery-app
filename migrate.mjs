@@ -1,4 +1,4 @@
-import { migrateData } from './lib/database.js';
+import { migrateData } from './lib/database.ts';
 
 console.log('Starting data migration...');
 migrateData();

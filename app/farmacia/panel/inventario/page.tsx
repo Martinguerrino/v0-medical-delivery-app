@@ -1,7 +1,6 @@
-"use client"
-
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
+import { inventoryStatements, medicationStatements, pharmacyStatements } from '@/lib/database'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,11 +8,9 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Plus, Edit, Package, ArrowLeft, CheckCircle, XCircle } from "lucide-react"
-import type { FarmaciaUser } from "@/lib/types/user-types"
 
 interface Medication {
   id: number
@@ -32,217 +29,171 @@ interface Medication {
   inStock: boolean
 }
 
-export default function InventarioPage() {
-  const router = useRouter()
-  const [farmacia, setFarmacia] = useState<FarmaciaUser | null>(null)
-  const [medications, setMedications] = useState<Medication[]>([])
-  const [loading, setLoading] = useState(true)
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [editingMedication, setEditingMedication] = useState<Medication | null>(null)
-  const [error, setError] = useState("")
-  const [success, setSuccess] = useState("")
-
-  // Form states
-  const [formData, setFormData] = useState({
-    name: "",
-    genericName: "",
-    brand: "",
-    category: "",
-    requiresPrescription: false,
-    description: "",
-    dosage: "",
-    presentation: "",
-    activeIngredient: "",
-    laboratory: "",
-    price: "",
-    stock: "",
-  })
-
-  useEffect(() => {
-    const userData = localStorage.getItem("user")
-    if (userData) {
-      const user = JSON.parse(userData)
-      if (user.role === "Farmacia") {
-        setFarmacia(user)
-        loadMedications()
-      } else {
-        router.push("/auth")
-      }
-    } else {
-      router.push("/auth")
-    }
-  }, [router])
-
-  const loadMedications = async () => {
-    try {
-      const response = await fetch(`/api/medications?pharmacyId=${farmacia?.id}`)
-      if (response.ok) {
-        const data = await response.json()
-        setMedications(data)
-      }
-    } catch (error) {
-      console.error('Error loading medications:', error)
-    } finally {
-      setLoading(false)
-    }
+async function getFarmaciaUser() {
+  // In a real app, get from session/auth
+  // For now, return a mock farmacia user
+  return {
+    id: 'farmacity',
+    role: 'Farmacia' as const,
+    nombreFarmacia: 'Farmacity Test'
   }
+}
 
-  const resetForm = () => {
-    setFormData({
-      name: "",
-      genericName: "",
-      brand: "",
-      category: "",
-      requiresPrescription: false,
-      description: "",
-      dosage: "",
-      presentation: "",
-      activeIngredient: "",
-      laboratory: "",
-      price: "",
-      stock: "",
-    })
-  }
+async function getMedications(pharmacyId: string): Promise<Medication[]> {
+  const inventoryItems = inventoryStatements.getInventoryWithDetails.all(pharmacyId)
+  return inventoryItems.map((item: any) => ({
+    ...item,
+    id: item.medicationId,
+    price: item.precio,
+    inStock: item.stock > 0,
+  }))
+}
 
-  const handleAddMedication = async () => {
-    // Validate required fields
-    if (!formData.name || !formData.price || !formData.stock) {
-      setError("Por favor complete todos los campos obligatorios")
-      return
-    }
+async function addMedication(formData: FormData) {
+  'use server'
 
-    // Validate price and stock
-    const price = parseFloat(formData.price)
-    const stock = parseInt(formData.stock)
+  const pharmacyId = formData.get('pharmacyId') as string
+  const name = formData.get('name') as string
+  const genericName = formData.get('genericName') as string
+  const brand = formData.get('brand') as string
+  const category = formData.get('category') as string
+  const price = parseFloat(formData.get('price') as string)
+  const stock = parseInt(formData.get('stock') as string)
+  const dosage = formData.get('dosage') as string
+  const presentation = formData.get('presentation') as string
+  const laboratory = formData.get('laboratory') as string
+  const description = formData.get('description') as string
 
-    if (isNaN(price) || price <= 0) {
-      setError("El precio debe ser un número positivo")
-      return
-    }
+  // Insert medication
+  const insertResult = medicationStatements.insert.run(
+    null,
+    name,
+    genericName || '',
+    brand || '',
+    category || 'Otros',
+    0, // requiresPrescription
+    description || '',
+    dosage || '',
+    presentation || '',
+    '', // activeIngredient
+    laboratory || '',
+    price
+  )
 
-    if (isNaN(stock) || stock < 0) {
-      setError("El stock debe ser un número entero no negativo")
-      return
-    }
+  const newMedicationId = insertResult.lastInsertRowid
 
-    try {
-      const response = await fetch('/api/medications', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...formData,
-          price,
-          stock,
-          pharmacyId: farmacia?.id,
-        }),
-      })
-
-      if (response.ok) {
-        setSuccess("Medicamento agregado exitosamente")
-        setIsAddDialogOpen(false)
-        resetForm()
-        loadMedications()
-        setTimeout(() => setSuccess(""), 3000)
-      } else {
-        const errorData = await response.json()
-        setError(errorData.message || "Error al agregar medicamento")
-      }
-    } catch (error) {
-      console.error('Error adding medication:', error)
-      setError("Error al agregar medicamento")
-    }
-  }
-
-  const handleEditMedication = async () => {
-    if (!editingMedication) return
-
-    // Validate required fields
-    if (!formData.name || !formData.price || !formData.stock) {
-      setError("Por favor complete todos los campos obligatorios")
-      return
-    }
-
-    // Validate price and stock
-    const price = parseFloat(formData.price)
-    const stock = parseInt(formData.stock)
-
-    if (isNaN(price) || price <= 0) {
-      setError("El precio debe ser un número positivo")
-      return
-    }
-
-    if (isNaN(stock) || stock < 0) {
-      setError("El stock debe ser un número entero no negativo")
-      return
-    }
-
-    try {
-      const response = await fetch(`/api/medications/${editingMedication.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...formData,
-          price,
-          stock,
-          pharmacyId: farmacia?.id,
-        }),
-      })
-
-      if (response.ok) {
-        setSuccess("Medicamento actualizado exitosamente")
-        setIsEditDialogOpen(false)
-        setEditingMedication(null)
-        resetForm()
-        loadMedications()
-        setTimeout(() => setSuccess(""), 3000)
-      } else {
-        const errorData = await response.json()
-        setError(errorData.message || "Error al actualizar medicamento")
-      }
-    } catch (error) {
-      console.error('Error updating medication:', error)
-      setError("Error al actualizar medicamento")
-    }
-  }
-
-  const openEditDialog = (medication: Medication) => {
-    setEditingMedication(medication)
-    setFormData({
-      name: medication.name,
-      genericName: medication.genericName,
-      brand: medication.brand,
-      category: medication.category,
-      requiresPrescription: medication.requiresPrescription,
-      description: medication.description,
-      dosage: medication.dosage,
-      presentation: medication.presentation,
-      activeIngredient: medication.activeIngredient,
-      laboratory: medication.laboratory,
-      price: medication.price.toString(),
-      stock: medication.stock.toString(),
-    })
-    setIsEditDialogOpen(true)
-  }
-
-  if (!farmacia) {
-    return null
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <Package className="h-8 w-8 animate-spin mx-auto mb-4" />
-          <p>Cargando inventario...</p>
-        </div>
-      </div>
+  // Add to inventory - ensure pharmacy exists first
+  let pharmacyExists = pharmacyStatements.getById.get(pharmacyId)
+  if (!pharmacyExists) {
+    // Create the pharmacy if it doesn't exist
+    pharmacyStatements.insert.run(
+      pharmacyId,
+      'Farmacity Test',
+      '/placeholder-ha3vf.png',
+      4.5,
+      '30-45 min',
+      350,
+      1500,
+      'Av. Santa Fe 1234, CABA',
+      '0800-333-2762',
+      1, // isOpen
+      '24hs',
+      1, // isOnGuard
+      '24hs todos los días',
+      '0800-333-2762',
+      'Palermo, CABA',
+      '["Delivery 24hs", "Vacunación", "Control de presión", "Inyectables", "Test COVID-19", "Perfumería"]',
+      '["Medicamentos oncológicos", "Nutrición deportiva", "Dermocosmética", "Productos naturales"]',
+      '["Efectivo", "Débito", "Crédito", "Mercado Pago", "Transferencia", "Cheques"]',
+      'https://www.farmacity.com',
+      'info@farmacity.com',
+      null,
+      '["ISO 9001", "Buenas Prácticas de Farmacia", "ANMAT"]',
+      1997,
+      15420,
+      37,
+      1, // hasParking
+      1, // isAccessible
+      '["Español", "Inglés"]',
+      'Dra. María González',
+      'MP 12345',
+      '["OSDE", "Swiss Medical", "Galeno", "Medicus", "IOMA"]',
+      0, // Posx
+      0  // Posy
     )
   }
+
+  inventoryStatements.insert.run(
+    pharmacyId,
+    newMedicationId,
+    price,
+    stock,
+    new Date().toISOString()
+  )
+
+  revalidatePath('/farmacia/panel/inventario')
+}
+
+async function updateMedication(formData: FormData) {
+  'use server'
+
+  const id = parseInt(formData.get('id') as string)
+  const pharmacyId = formData.get('pharmacyId') as string
+  const name = formData.get('name') as string
+  const genericName = formData.get('genericName') as string
+  const brand = formData.get('brand') as string
+  const category = formData.get('category') as string
+  const price = parseFloat(formData.get('price') as string)
+  const stock = parseInt(formData.get('stock') as string)
+  const dosage = formData.get('dosage') as string
+  const presentation = formData.get('presentation') as string
+  const laboratory = formData.get('laboratory') as string
+  const description = formData.get('description') as string
+
+  // Update medication
+  medicationStatements.update.run(
+    name,
+    genericName || '',
+    brand || '',
+    category || 'Otros',
+    0,
+    description || '',
+    dosage || '',
+    presentation || '',
+    '',
+    laboratory || '',
+    id
+  )
+
+  // Update inventory
+  inventoryStatements.update.run(
+    price,
+    stock,
+    new Date().toISOString(),
+    pharmacyId,
+    id
+  )
+
+  revalidatePath('/farmacia/panel/inventario')
+}
+
+async function deleteMedication(formData: FormData) {
+  'use server'
+
+  const id = parseInt(formData.get('id') as string)
+
+  // Delete from inventory first
+  inventoryStatements.delete.run('farmacity', id) // Assuming pharmacyId
+
+  // Delete medication
+  medicationStatements.delete.run(id)
+
+  revalidatePath('/farmacia/panel/inventario')
+}
+
+export default async function InventarioPage() {
+  const farmacia = await getFarmaciaUser()
+  const medications = await getMedications(farmacia.id)
 
   return (
     <div className="min-h-screen bg-background">
@@ -250,33 +201,22 @@ export default function InventarioPage() {
         <div className="mb-8">
           <div className="flex items-center gap-4 mb-2">
             <Button
-              onClick={() => router.push('/farmacia/panel')}
+              asChild
               variant="outline"
               className="gap-2"
             >
-              <ArrowLeft className="h-4 w-4" />
-              Volver al Panel
+              <a href="/farmacia/panel">
+                <ArrowLeft className="h-4 w-4" />
+                Volver al Panel
+              </a>
             </Button>
             <h1 className="text-3xl font-bold text-primary">Gestión de Inventario</h1>
           </div>
           <p className="text-muted-foreground">Administra los medicamentos de tu farmacia</p>
         </div>
 
-        {error && (
-          <Alert variant="destructive" className="mb-6">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
-        {success && (
-          <Alert className="mb-6 border-green-500 bg-green-50">
-            <CheckCircle className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-green-800">{success}</AlertDescription>
-          </Alert>
-        )}
-
         <div className="mb-6">
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <Dialog>
             <DialogTrigger asChild>
               <Button className="gap-2">
                 <Plus className="h-4 w-4" />
@@ -290,14 +230,15 @@ export default function InventarioPage() {
                   Complete la información del medicamento para agregarlo al inventario
                 </DialogDescription>
               </DialogHeader>
-              <div className="grid gap-4 py-4">
+              <form action={addMedication} className="grid gap-4 py-4">
+                <input type="hidden" name="pharmacyId" value={farmacia.id} />
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="name">Nombre del Medicamento *</Label>
                     <Input
                       id="name"
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      name="name"
+                      required
                       placeholder="Ej: Ibuprofeno 400mg"
                     />
                   </div>
@@ -305,8 +246,7 @@ export default function InventarioPage() {
                     <Label htmlFor="genericName">Nombre Genérico</Label>
                     <Input
                       id="genericName"
-                      value={formData.genericName}
-                      onChange={(e) => setFormData({ ...formData, genericName: e.target.value })}
+                      name="genericName"
                       placeholder="Ej: Ibuprofeno"
                     />
                   </div>
@@ -317,14 +257,13 @@ export default function InventarioPage() {
                     <Label htmlFor="brand">Marca</Label>
                     <Input
                       id="brand"
-                      value={formData.brand}
-                      onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                      name="brand"
                       placeholder="Ej: Genérico"
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="category">Categoría</Label>
-                    <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
+                    <Select name="category" defaultValue="Otros">
                       <SelectTrigger>
                         <SelectValue placeholder="Seleccione categoría" />
                       </SelectTrigger>
@@ -345,10 +284,10 @@ export default function InventarioPage() {
                     <Label htmlFor="price">Precio (ARS) *</Label>
                     <Input
                       id="price"
+                      name="price"
                       type="number"
                       step="0.01"
-                      value={formData.price}
-                      onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                      required
                       placeholder="0.00"
                     />
                   </div>
@@ -356,9 +295,9 @@ export default function InventarioPage() {
                     <Label htmlFor="stock">Stock *</Label>
                     <Input
                       id="stock"
+                      name="stock"
                       type="number"
-                      value={formData.stock}
-                      onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
+                      required
                       placeholder="0"
                     />
                   </div>
@@ -368,8 +307,7 @@ export default function InventarioPage() {
                   <Label htmlFor="dosage">Dosificación</Label>
                   <Input
                     id="dosage"
-                    value={formData.dosage}
-                    onChange={(e) => setFormData({ ...formData, dosage: e.target.value })}
+                    name="dosage"
                     placeholder="Ej: 400mg tabletas"
                   />
                 </div>
@@ -378,8 +316,7 @@ export default function InventarioPage() {
                   <Label htmlFor="presentation">Presentación</Label>
                   <Input
                     id="presentation"
-                    value={formData.presentation}
-                    onChange={(e) => setFormData({ ...formData, presentation: e.target.value })}
+                    name="presentation"
                     placeholder="Ej: Caja con 20 tabletas"
                   />
                 </div>
@@ -388,8 +325,7 @@ export default function InventarioPage() {
                   <Label htmlFor="laboratory">Laboratorio</Label>
                   <Input
                     id="laboratory"
-                    value={formData.laboratory}
-                    onChange={(e) => setFormData({ ...formData, laboratory: e.target.value })}
+                    name="laboratory"
                     placeholder="Ej: Pfizer"
                   />
                 </div>
@@ -398,21 +334,18 @@ export default function InventarioPage() {
                   <Label htmlFor="description">Descripción</Label>
                   <Textarea
                     id="description"
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    name="description"
                     placeholder="Descripción del medicamento..."
                     rows={3}
                   />
                 </div>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => { setIsAddDialogOpen(false); resetForm(); }}>
-                  Cancelar
-                </Button>
-                <Button onClick={handleAddMedication}>
-                  Agregar Medicamento
-                </Button>
-              </div>
+
+                <div className="flex justify-end gap-2">
+                  <Button type="submit">
+                    Agregar Medicamento
+                  </Button>
+                </div>
+              </form>
             </DialogContent>
           </Dialog>
         </div>
@@ -471,15 +404,155 @@ export default function InventarioPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openEditDialog(medication)}
-                          className="gap-1"
-                        >
-                          <Edit className="h-3 w-3" />
-                          Editar
-                        </Button>
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-1 mr-2"
+                            >
+                              <Edit className="h-3 w-3" />
+                              Editar
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                            <DialogHeader>
+                              <DialogTitle>Editar Medicamento</DialogTitle>
+                              <DialogDescription>
+                                Modifique la información del medicamento
+                              </DialogDescription>
+                            </DialogHeader>
+                            <form action={updateMedication} className="grid gap-4 py-4">
+                              <input type="hidden" name="id" value={medication.id} />
+                              <input type="hidden" name="pharmacyId" value={farmacia.id} />
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <Label htmlFor={`edit-name-${medication.id}`}>Nombre del Medicamento *</Label>
+                                  <Input
+                                    id={`edit-name-${medication.id}`}
+                                    name="name"
+                                    defaultValue={medication.name}
+                                    required
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor={`edit-genericName-${medication.id}`}>Nombre Genérico</Label>
+                                  <Input
+                                    id={`edit-genericName-${medication.id}`}
+                                    name="genericName"
+                                    defaultValue={medication.genericName}
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <Label htmlFor={`edit-brand-${medication.id}`}>Marca</Label>
+                                  <Input
+                                    id={`edit-brand-${medication.id}`}
+                                    name="brand"
+                                    defaultValue={medication.brand}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor={`edit-category-${medication.id}`}>Categoría</Label>
+                                  <Select name="category" defaultValue={medication.category}>
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="Analgésicos">Analgésicos</SelectItem>
+                                      <SelectItem value="Antibióticos">Antibióticos</SelectItem>
+                                      <SelectItem value="Cardiovasculares">Cardiovasculares</SelectItem>
+                                      <SelectItem value="Antidiabéticos">Antidiabéticos</SelectItem>
+                                      <SelectItem value="Gastroenterología">Gastroenterología</SelectItem>
+                                      <SelectItem value="Otros">Otros</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <Label htmlFor={`edit-price-${medication.id}`}>Precio (ARS) *</Label>
+                                  <Input
+                                    id={`edit-price-${medication.id}`}
+                                    name="price"
+                                    type="number"
+                                    step="0.01"
+                                    defaultValue={medication.price}
+                                    required
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor={`edit-stock-${medication.id}`}>Stock *</Label>
+                                  <Input
+                                    id={`edit-stock-${medication.id}`}
+                                    name="stock"
+                                    type="number"
+                                    defaultValue={medication.stock}
+                                    required
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="space-y-2">
+                                <Label htmlFor={`edit-dosage-${medication.id}`}>Dosificación</Label>
+                                <Input
+                                  id={`edit-dosage-${medication.id}`}
+                                  name="dosage"
+                                  defaultValue={medication.dosage}
+                                />
+                              </div>
+
+                              <div className="space-y-2">
+                                <Label htmlFor={`edit-presentation-${medication.id}`}>Presentación</Label>
+                                <Input
+                                  id={`edit-presentation-${medication.id}`}
+                                  name="presentation"
+                                  defaultValue={medication.presentation}
+                                />
+                              </div>
+
+                              <div className="space-y-2">
+                                <Label htmlFor={`edit-laboratory-${medication.id}`}>Laboratorio</Label>
+                                <Input
+                                  id={`edit-laboratory-${medication.id}`}
+                                  name="laboratory"
+                                  defaultValue={medication.laboratory}
+                                />
+                              </div>
+
+                              <div className="space-y-2">
+                                <Label htmlFor={`edit-description-${medication.id}`}>Descripción</Label>
+                                <Textarea
+                                  id={`edit-description-${medication.id}`}
+                                  name="description"
+                                  defaultValue={medication.description}
+                                  rows={3}
+                                />
+                              </div>
+
+                              <div className="flex justify-end gap-2">
+                                <Button type="submit">
+                                  Actualizar Medicamento
+                                </Button>
+                              </div>
+                            </form>
+                          </DialogContent>
+                        </Dialog>
+
+                        <form action={deleteMedication} className="inline">
+                          <input type="hidden" name="id" value={medication.id} />
+                          <Button
+                            type="submit"
+                            variant="destructive"
+                            size="sm"
+                            className="gap-1"
+                          >
+                            Eliminar
+                          </Button>
+                        </form>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -488,132 +561,6 @@ export default function InventarioPage() {
             )}
           </CardContent>
         </Card>
-
-        {/* Edit Dialog */}
-        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Editar Medicamento</DialogTitle>
-              <DialogDescription>
-                Modifique la información del medicamento
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit-name">Nombre del Medicamento *</Label>
-                  <Input
-                    id="edit-name"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-genericName">Nombre Genérico</Label>
-                  <Input
-                    id="edit-genericName"
-                    value={formData.genericName}
-                    onChange={(e) => setFormData({ ...formData, genericName: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit-brand">Marca</Label>
-                  <Input
-                    id="edit-brand"
-                    value={formData.brand}
-                    onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-category">Categoría</Label>
-                  <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Analgésicos">Analgésicos</SelectItem>
-                      <SelectItem value="Antibióticos">Antibióticos</SelectItem>
-                      <SelectItem value="Cardiovasculares">Cardiovasculares</SelectItem>
-                      <SelectItem value="Antidiabéticos">Antidiabéticos</SelectItem>
-                      <SelectItem value="Gastroenterología">Gastroenterología</SelectItem>
-                      <SelectItem value="Otros">Otros</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit-price">Precio (ARS) *</Label>
-                  <Input
-                    id="edit-price"
-                    type="number"
-                    step="0.01"
-                    value={formData.price}
-                    onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-stock">Stock *</Label>
-                  <Input
-                    id="edit-stock"
-                    type="number"
-                    value={formData.stock}
-                    onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="edit-dosage">Dosificación</Label>
-                <Input
-                  id="edit-dosage"
-                  value={formData.dosage}
-                  onChange={(e) => setFormData({ ...formData, dosage: e.target.value })}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="edit-presentation">Presentación</Label>
-                <Input
-                  id="edit-presentation"
-                  value={formData.presentation}
-                  onChange={(e) => setFormData({ ...formData, presentation: e.target.value })}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="edit-laboratory">Laboratorio</Label>
-                <Input
-                  id="edit-laboratory"
-                  value={formData.laboratory}
-                  onChange={(e) => setFormData({ ...formData, laboratory: e.target.value })}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="edit-description">Descripción</Label>
-                <Textarea
-                  id="edit-description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  rows={3}
-                />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => { setIsEditDialogOpen(false); setEditingMedication(null); resetForm(); }}>
-                Cancelar
-              </Button>
-              <Button onClick={handleEditMedication}>
-                Actualizar Medicamento
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
       </div>
     </div>
   )

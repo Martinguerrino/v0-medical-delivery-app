@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { medicationStatements } from '@/lib/database'
+import { medicationStatements, inventoryStatements } from '@/lib/database'
 
 export async function PUT(
   request: NextRequest,
@@ -28,6 +28,7 @@ export async function PUT(
       laboratory,
       price,
       stock,
+      pharmacyId,
     } = body
 
     // Validate required fields
@@ -61,6 +62,32 @@ export async function PUT(
       laboratory || '',
       id
     )
+
+    // Update inventory if pharmacyId and price/stock provided
+    if (pharmacyId && (price !== undefined || stock !== undefined)) {
+      const existingInventory = inventoryStatements.getByPharmacyId.all(pharmacyId)
+      const existingItem = existingInventory.find((item: any) => item.medicationId === id)
+
+      if (existingItem) {
+        // Update existing inventory item
+        inventoryStatements.update.run(
+          price !== undefined ? price : (existingItem as any).precio,
+          stock !== undefined ? stock : (existingItem as any).stock,
+          new Date().toISOString(),
+          pharmacyId,
+          id
+        )
+      } else if (price !== undefined && stock !== undefined) {
+        // Create new inventory item if doesn't exist
+        inventoryStatements.insert.run(
+          pharmacyId,
+          id,
+          price,
+          stock,
+          new Date().toISOString()
+        )
+      }
+    }
 
     return NextResponse.json({
       success: true,
