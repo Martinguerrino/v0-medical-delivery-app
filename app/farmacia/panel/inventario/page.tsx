@@ -1,6 +1,5 @@
-import { revalidatePath } from 'next/cache'
-import { redirect } from 'next/navigation'
-import { inventoryStatements, medicationStatements, pharmacyStatements } from '@/lib/database'
+'use client'
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,7 +9,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Edit, Package, ArrowLeft, CheckCircle, XCircle } from "lucide-react"
+import { Plus, Edit, Package, ArrowLeft, CheckCircle, XCircle, AlertTriangle } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { useState, useEffect } from "react"
 
 interface Medication {
   id: number
@@ -29,171 +30,129 @@ interface Medication {
   inStock: boolean
 }
 
-async function getFarmaciaUser() {
-  // In a real app, get from session/auth
-  // For now, return a mock farmacia user
-  return {
+export default function InventarioPage() {
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [medications, setMedications] = useState<Medication[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const farmacia = {
     id: 'farmacity',
     role: 'Farmacia' as const,
     nombreFarmacia: 'Farmacity Test'
   }
-}
 
-async function getMedications(pharmacyId: string): Promise<Medication[]> {
-  const inventoryItems = inventoryStatements.getInventoryWithDetails.all(pharmacyId)
-  return inventoryItems.map((item: any) => ({
-    ...item,
-    id: item.medicationId,
-    price: item.precio,
-    inStock: item.stock > 0,
-  }))
-}
+  useEffect(() => {
+    fetchMedications()
+  }, [])
 
-async function addMedication(formData: FormData) {
-  'use server'
-
-  const pharmacyId = formData.get('pharmacyId') as string
-  const name = formData.get('name') as string
-  const genericName = formData.get('genericName') as string
-  const brand = formData.get('brand') as string
-  const category = formData.get('category') as string
-  const price = parseFloat(formData.get('price') as string)
-  const stock = parseInt(formData.get('stock') as string)
-  const dosage = formData.get('dosage') as string
-  const presentation = formData.get('presentation') as string
-  const laboratory = formData.get('laboratory') as string
-  const description = formData.get('description') as string
-
-  // Insert medication
-  const insertResult = medicationStatements.insert.run(
-    null,
-    name,
-    genericName || '',
-    brand || '',
-    category || 'Otros',
-    0, // requiresPrescription
-    description || '',
-    dosage || '',
-    presentation || '',
-    '', // activeIngredient
-    laboratory || '',
-    price
-  )
-
-  const newMedicationId = insertResult.lastInsertRowid
-
-  // Add to inventory - ensure pharmacy exists first
-  let pharmacyExists = pharmacyStatements.getById.get(pharmacyId)
-  if (!pharmacyExists) {
-    // Create the pharmacy if it doesn't exist
-    pharmacyStatements.insert.run(
-      pharmacyId,
-      'Farmacity Test',
-      '/placeholder-ha3vf.png',
-      4.5,
-      '30-45 min',
-      350,
-      1500,
-      'Av. Santa Fe 1234, CABA',
-      '0800-333-2762',
-      1, // isOpen
-      '24hs',
-      1, // isOnGuard
-      '24hs todos los días',
-      '0800-333-2762',
-      'Palermo, CABA',
-      '["Delivery 24hs", "Vacunación", "Control de presión", "Inyectables", "Test COVID-19", "Perfumería"]',
-      '["Medicamentos oncológicos", "Nutrición deportiva", "Dermocosmética", "Productos naturales"]',
-      '["Efectivo", "Débito", "Crédito", "Mercado Pago", "Transferencia", "Cheques"]',
-      'https://www.farmacity.com',
-      'info@farmacity.com',
-      null,
-      '["ISO 9001", "Buenas Prácticas de Farmacia", "ANMAT"]',
-      1997,
-      15420,
-      37,
-      1, // hasParking
-      1, // isAccessible
-      '["Español", "Inglés"]',
-      'Dra. María González',
-      'MP 12345',
-      '["OSDE", "Swiss Medical", "Galeno", "Medicus", "IOMA"]',
-      0, // Posx
-      0  // Posy
-    )
+  async function fetchMedications() {
+    try {
+      const response = await fetch(`/api/inventory/${farmacia.id}`)
+      if (response.ok) {
+        const data = await response.json()
+        setMedications(data)
+      }
+    } catch (error) {
+      console.error('Error fetching medications:', error)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  inventoryStatements.insert.run(
-    pharmacyId,
-    newMedicationId,
-    price,
-    stock,
-    new Date().toISOString()
-  )
+  async function handleAddMedication(formData: FormData) {
+    const data = {
+      pharmacyId: formData.get('pharmacyId'),
+      name: formData.get('name'),
+      genericName: formData.get('genericName'),
+      brand: formData.get('brand'),
+      category: formData.get('category'),
+      price: parseFloat(formData.get('price') as string),
+      stock: parseInt(formData.get('stock') as string),
+      dosage: formData.get('dosage'),
+      presentation: formData.get('presentation'),
+      laboratory: formData.get('laboratory'),
+      description: formData.get('description')
+    }
 
-  revalidatePath('/farmacia/panel/inventario')
-}
+    try {
+      const response = await fetch('/api/inventory', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      })
 
-async function updateMedication(formData: FormData) {
-  'use server'
+      const result = await response.json()
 
-  const id = parseInt(formData.get('id') as string)
-  const pharmacyId = formData.get('pharmacyId') as string
-  const name = formData.get('name') as string
-  const genericName = formData.get('genericName') as string
-  const brand = formData.get('brand') as string
-  const category = formData.get('category') as string
-  const price = parseFloat(formData.get('price') as string)
-  const stock = parseInt(formData.get('stock') as string)
-  const dosage = formData.get('dosage') as string
-  const presentation = formData.get('presentation') as string
-  const laboratory = formData.get('laboratory') as string
-  const description = formData.get('description') as string
+      if (!response.ok) {
+        setErrorMessage(result.error)
+      } else {
+        setErrorMessage(null)
+        setIsDialogOpen(false)
+        fetchMedications() // Refresh the list
+      }
+    } catch (error) {
+      console.error('Error adding medication:', error)
+      setErrorMessage('Error interno del servidor')
+    }
+  }
 
-  // Update medication
-  medicationStatements.update.run(
-    name,
-    genericName || '',
-    brand || '',
-    category || 'Otros',
-    0,
-    description || '',
-    dosage || '',
-    presentation || '',
-    '',
-    laboratory || '',
-    id
-  )
+  async function handleUpdateMedication(formData: FormData) {
+    const data = {
+      id: parseInt(formData.get('id') as string),
+      pharmacyId: formData.get('pharmacyId'),
+      name: formData.get('name'),
+      genericName: formData.get('genericName'),
+      brand: formData.get('brand'),
+      category: formData.get('category'),
+      price: parseFloat(formData.get('price') as string),
+      stock: parseInt(formData.get('stock') as string),
+      dosage: formData.get('dosage'),
+      presentation: formData.get('presentation'),
+      laboratory: formData.get('laboratory'),
+      description: formData.get('description')
+    }
 
-  // Update inventory
-  inventoryStatements.update.run(
-    price,
-    stock,
-    new Date().toISOString(),
-    pharmacyId,
-    id
-  )
+    try {
+      const response = await fetch('/api/inventory', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      })
 
-  revalidatePath('/farmacia/panel/inventario')
-}
+      if (response.ok) {
+        fetchMedications() // Refresh the list
+      } else {
+        console.error('Error updating medication')
+      }
+    } catch (error) {
+      console.error('Error updating medication:', error)
+    }
+  }
 
-async function deleteMedication(formData: FormData) {
-  'use server'
+  async function handleDeleteMedication(id: number) {
+    try {
+      const response = await fetch('/api/inventory', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id }),
+      })
 
-  const id = parseInt(formData.get('id') as string)
-
-  // Delete from inventory first
-  inventoryStatements.delete.run('farmacity', id) // Assuming pharmacyId
-
-  // Delete medication
-  medicationStatements.delete.run(id)
-
-  revalidatePath('/farmacia/panel/inventario')
-}
-
-export default async function InventarioPage() {
-  const farmacia = await getFarmaciaUser()
-  const medications = await getMedications(farmacia.id)
+      if (response.ok) {
+        fetchMedications() // Refresh the list
+      } else {
+        console.error('Error deleting medication')
+      }
+    } catch (error) {
+      console.error('Error deleting medication:', error)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -216,7 +175,7 @@ export default async function InventarioPage() {
         </div>
 
         <div className="mb-6">
-          <Dialog>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button className="gap-2">
                 <Plus className="h-4 w-4" />
@@ -230,8 +189,16 @@ export default async function InventarioPage() {
                   Complete la información del medicamento para agregarlo al inventario
                 </DialogDescription>
               </DialogHeader>
-              <form action={addMedication} className="grid gap-4 py-4">
+              <form action={handleAddMedication} className="grid gap-4 py-4">
                 <input type="hidden" name="pharmacyId" value={farmacia.id} />
+
+                {errorMessage && (
+                  <Alert>
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>{errorMessage}</AlertDescription>
+                  </Alert>
+                )}
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="name">Nombre del Medicamento *</Label>
@@ -422,7 +389,7 @@ export default async function InventarioPage() {
                                 Modifique la información del medicamento
                               </DialogDescription>
                             </DialogHeader>
-                            <form action={updateMedication} className="grid gap-4 py-4">
+                            <form action={handleUpdateMedication} className="grid gap-4 py-4">
                               <input type="hidden" name="id" value={medication.id} />
                               <input type="hidden" name="pharmacyId" value={farmacia.id} />
                               <div className="grid grid-cols-2 gap-4">
@@ -542,17 +509,14 @@ export default async function InventarioPage() {
                           </DialogContent>
                         </Dialog>
 
-                        <form action={deleteMedication} className="inline">
-                          <input type="hidden" name="id" value={medication.id} />
-                          <Button
-                            type="submit"
-                            variant="destructive"
-                            size="sm"
-                            className="gap-1"
-                          >
-                            Eliminar
-                          </Button>
-                        </form>
+                        <Button
+                          onClick={() => handleDeleteMedication(medication.id)}
+                          variant="destructive"
+                          size="sm"
+                          className="gap-1"
+                        >
+                          Eliminar
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
