@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const { id, pharmacyId, name, genericName, brand, category, price, stock, dosage, presentation, laboratory, description } = await request.json()
+    const { id, pharmacyId, name, genericName, brand, category, requiresPrescription, price, stock, dosage, presentation, laboratory, description } = await request.json()
 
     // Update medication
     medicationStatements.update.run(
@@ -97,7 +97,7 @@ export async function PUT(request: NextRequest) {
       genericName || '',
       brand || '',
       category || 'Otros',
-      0,
+      requiresPrescription ? 1 : 0,
       description || '',
       dosage || '',
       presentation || '',

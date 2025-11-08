@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Plus, Edit, Package, ArrowLeft, CheckCircle, XCircle, AlertTriangle } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Checkbox } from "@/components/ui/checkbox"
 import { useState, useEffect } from "react"
 
 interface Medication {
@@ -33,8 +34,12 @@ interface Medication {
 export default function InventarioPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [editMedication, setEditMedication] = useState<Medication | null>(null)
   const [medications, setMedications] = useState<Medication[]>([])
   const [loading, setLoading] = useState(true)
+  const [requiresPrescription, setRequiresPrescription] = useState(false)
+  const [editRequiresPrescription, setEditRequiresPrescription] = useState(false)
 
   const farmacia = {
     id: 'farmacity',
@@ -67,6 +72,7 @@ export default function InventarioPage() {
       genericName: formData.get('genericName'),
       brand: formData.get('brand'),
       category: formData.get('category'),
+      requiresPrescription: requiresPrescription,
       price: parseFloat(formData.get('price') as string),
       stock: parseInt(formData.get('stock') as string),
       dosage: formData.get('dosage'),
@@ -107,6 +113,7 @@ export default function InventarioPage() {
       genericName: formData.get('genericName'),
       brand: formData.get('brand'),
       category: formData.get('category'),
+      requiresPrescription: editRequiresPrescription,
       price: parseFloat(formData.get('price') as string),
       stock: parseInt(formData.get('stock') as string),
       dosage: formData.get('dosage'),
@@ -125,6 +132,8 @@ export default function InventarioPage() {
       })
 
       if (response.ok) {
+        setIsEditDialogOpen(false)
+        setEditMedication(null)
         fetchMedications() // Refresh the list
       } else {
         console.error('Error updating medication')
@@ -226,12 +235,13 @@ export default function InventarioPage() {
                       id="brand"
                       name="brand"
                       placeholder="Ej: Genérico"
+                      className="border border-black"
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="category">Categoría</Label>
                     <Select name="category" defaultValue="Otros">
-                      <SelectTrigger>
+                      <SelectTrigger className="border border-black">
                         <SelectValue placeholder="Seleccione categoría" />
                       </SelectTrigger>
                       <SelectContent>
@@ -304,8 +314,29 @@ export default function InventarioPage() {
                     name="description"
                     placeholder="Descripción del medicamento..."
                     rows={3}
+                    className="border border-black"
                   />
                 </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="requiresPrescription"
+                      checked={requiresPrescription}
+                      onCheckedChange={(checked) => setRequiresPrescription(checked as boolean)}
+                    />
+                    <Label htmlFor="requiresPrescription">Requiere receta médica</Label>
+                  </div>
+                </div>
+
+                {requiresPrescription && (
+                  <Alert>
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>
+                      Medicamentos que requieren receta médica deben ser dispensados solo con prescripción válida.
+                    </AlertDescription>
+                  </Alert>
+                )}
 
                 <div className="flex justify-end gap-2">
                   <Button type="submit">
@@ -319,7 +350,7 @@ export default function InventarioPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Inventario de Medicamentos</CardTitle>
+            <CardTitle>Inventario</CardTitle>
             <CardDescription>
               Lista de todos los medicamentos disponibles en tu farmacia
             </CardDescription>
@@ -371,12 +402,13 @@ export default function InventarioPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <Dialog>
+                        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
                           <DialogTrigger asChild>
                             <Button
                               variant="outline"
                               size="sm"
                               className="gap-1 mr-2"
+                              onClick={() => { setEditMedication(medication); setEditRequiresPrescription(medication.requiresPrescription); }}
                             >
                               <Edit className="h-3 w-3" />
                               Editar
@@ -390,41 +422,42 @@ export default function InventarioPage() {
                               </DialogDescription>
                             </DialogHeader>
                             <form action={handleUpdateMedication} className="grid gap-4 py-4">
-                              <input type="hidden" name="id" value={medication.id} />
+                              <input type="hidden" name="id" value={editMedication?.id} />
                               <input type="hidden" name="pharmacyId" value={farmacia.id} />
                               <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                  <Label htmlFor={`edit-name-${medication.id}`}>Nombre del Medicamento *</Label>
+                                  <Label htmlFor={`edit-name-${editMedication?.id}`}>Nombre del Medicamento *</Label>
                                   <Input
-                                    id={`edit-name-${medication.id}`}
+                                    id={`edit-name-${editMedication?.id}`}
                                     name="name"
-                                    defaultValue={medication.name}
+                                    defaultValue={editMedication?.name}
                                     required
                                   />
                                 </div>
                                 <div className="space-y-2">
-                                  <Label htmlFor={`edit-genericName-${medication.id}`}>Nombre Genérico</Label>
+                                  <Label htmlFor={`edit-genericName-${editMedication?.id}`}>Nombre Genérico</Label>
                                   <Input
-                                    id={`edit-genericName-${medication.id}`}
+                                    id={`edit-genericName-${editMedication?.id}`}
                                     name="genericName"
-                                    defaultValue={medication.genericName}
+                                    defaultValue={editMedication?.genericName}
                                   />
                                 </div>
                               </div>
 
                               <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                  <Label htmlFor={`edit-brand-${medication.id}`}>Marca</Label>
+                                  <Label htmlFor={`edit-brand-${editMedication?.id}`}>Marca</Label>
                                   <Input
-                                    id={`edit-brand-${medication.id}`}
+                                    id={`edit-brand-${editMedication?.id}`}
                                     name="brand"
-                                    defaultValue={medication.brand}
+                                    defaultValue={editMedication?.brand}
+                                    className="border border-black"
                                   />
                                 </div>
                                 <div className="space-y-2">
-                                  <Label htmlFor={`edit-category-${medication.id}`}>Categoría</Label>
-                                  <Select name="category" defaultValue={medication.category}>
-                                    <SelectTrigger>
+                                  <Label htmlFor={`edit-category-${editMedication?.id}`}>Categoría</Label>
+                                  <Select name="category" defaultValue={editMedication?.category}>
+                                    <SelectTrigger className="border border-black">
                                       <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -441,64 +474,85 @@ export default function InventarioPage() {
 
                               <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                  <Label htmlFor={`edit-price-${medication.id}`}>Precio (ARS) *</Label>
+                                  <Label htmlFor={`edit-price-${editMedication?.id}`}>Precio (ARS) *</Label>
                                   <Input
-                                    id={`edit-price-${medication.id}`}
+                                    id={`edit-price-${editMedication?.id}`}
                                     name="price"
                                     type="number"
                                     step="0.01"
-                                    defaultValue={medication.price}
+                                    defaultValue={editMedication?.price}
                                     required
                                   />
                                 </div>
                                 <div className="space-y-2">
-                                  <Label htmlFor={`edit-stock-${medication.id}`}>Stock *</Label>
+                                  <Label htmlFor={`edit-stock-${editMedication?.id}`}>Stock *</Label>
                                   <Input
-                                    id={`edit-stock-${medication.id}`}
+                                    id={`edit-stock-${editMedication?.id}`}
                                     name="stock"
                                     type="number"
-                                    defaultValue={medication.stock}
+                                    defaultValue={editMedication?.stock}
                                     required
                                   />
                                 </div>
                               </div>
 
                               <div className="space-y-2">
-                                <Label htmlFor={`edit-dosage-${medication.id}`}>Dosificación</Label>
+                                <Label htmlFor={`edit-dosage-${editMedication?.id}`}>Dosificación</Label>
                                 <Input
-                                  id={`edit-dosage-${medication.id}`}
+                                  id={`edit-dosage-${editMedication?.id}`}
                                   name="dosage"
-                                  defaultValue={medication.dosage}
+                                  defaultValue={editMedication?.dosage}
                                 />
                               </div>
 
                               <div className="space-y-2">
-                                <Label htmlFor={`edit-presentation-${medication.id}`}>Presentación</Label>
+                                <Label htmlFor={`edit-presentation-${editMedication?.id}`}>Presentación</Label>
                                 <Input
-                                  id={`edit-presentation-${medication.id}`}
+                                  id={`edit-presentation-${editMedication?.id}`}
                                   name="presentation"
-                                  defaultValue={medication.presentation}
+                                  defaultValue={editMedication?.presentation}
                                 />
                               </div>
 
                               <div className="space-y-2">
-                                <Label htmlFor={`edit-laboratory-${medication.id}`}>Laboratorio</Label>
+                                <Label htmlFor={`edit-laboratory-${editMedication?.id}`}>Laboratorio</Label>
                                 <Input
-                                  id={`edit-laboratory-${medication.id}`}
+                                  id={`edit-laboratory-${editMedication?.id}`}
                                   name="laboratory"
-                                  defaultValue={medication.laboratory}
+                                  defaultValue={editMedication?.laboratory}
                                 />
                               </div>
 
                               <div className="space-y-2">
-                                <Label htmlFor={`edit-description-${medication.id}`}>Descripción</Label>
+                                <Label htmlFor={`edit-description-${editMedication?.id}`}>Descripción</Label>
                                 <Textarea
-                                  id={`edit-description-${medication.id}`}
+                                  id={`edit-description-${editMedication?.id}`}
                                   name="description"
-                                  defaultValue={medication.description}
+                                  defaultValue={editMedication?.description}
                                   rows={3}
+                                  className="border border-black"
                                 />
                               </div>
+
+                              <div className="space-y-2">
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id={`edit-requiresPrescription-${editMedication?.id}`}
+                                    checked={editRequiresPrescription}
+                                    onCheckedChange={(checked) => setEditRequiresPrescription(checked as boolean)}
+                                  />
+                                  <Label htmlFor={`edit-requiresPrescription-${editMedication?.id}`}>Requiere receta médica</Label>
+                                </div>
+                              </div>
+
+                              {editRequiresPrescription && (
+                                <Alert>
+                                  <AlertTriangle className="h-4 w-4" />
+                                  <AlertDescription>
+                                    Medicamentos que requieren receta médica deben ser dispensados solo con prescripción válida.
+                                  </AlertDescription>
+                                </Alert>
+                              )}
 
                               <div className="flex justify-end gap-2">
                                 <Button type="submit">
