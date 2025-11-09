@@ -1,9 +1,63 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { inventoryStatements, medicationStatements, pharmacyStatements } from '@/lib/database'
+import { inventoryStatements, medicationStatements, pharmacyStatements, userStatements } from '@/lib/database'
 
 export async function POST(request: NextRequest) {
   try {
     const { pharmacyId, name, genericName, brand, category, price, stock, dosage, presentation, laboratory, description } = await request.json()
+    
+    if (!pharmacyId || !name) {
+      return NextResponse.json({ error: 'Faltan datos obligatorios (pharmacyId, name).' }, { status: 400 })
+    }
+    
+  const pharmacyUser: any = userStatements.getById.get(pharmacyId)
+    if (!pharmacyUser || pharmacyUser.role !== 'Farmacia') {
+      return NextResponse.json({ error: 'La farmacia indicada no existe.' }, { status: 404 })
+    }
+    
+    if (price === undefined || price === null || stock === undefined || stock === null) {
+      return NextResponse.json({ error: 'Debe especificar precio y stock.' }, { status: 400 })
+    }
+
+    let pharmacyExists = pharmacyStatements.getById.get(pharmacyId)
+    if (!pharmacyExists) {
+      const defaultName = pharmacyUser.nombreFarmacia || pharmacyUser.nombre || 'Farmacia'
+      pharmacyStatements.insert.run(
+        pharmacyId,
+        defaultName,
+        '/placeholder-ha3vf.png',
+        0,
+        'Sin información',
+        0,
+        0,
+        pharmacyUser.direccion || pharmacyUser.address || 'Sin dirección registrada',
+        pharmacyUser.telefono || pharmacyUser.phone || 'Sin teléfono registrado',
+        1,
+        '24hs',
+        0,
+        null,
+        null,
+        pharmacyUser.address || 'Sin ubicación registrada',
+        JSON.stringify(['Servicios no configurados']),
+        JSON.stringify([]),
+        JSON.stringify(['Efectivo']),
+        null,
+        pharmacyUser.email || null,
+        null,
+        JSON.stringify([]),
+        new Date().getFullYear(),
+        0,
+        0,
+        0,
+        0,
+        JSON.stringify(['Español']),
+        defaultName,
+        'N/A',
+        JSON.stringify([]),
+        0,
+        0,
+        0
+      )
+    }
 
     // Check if medication already exists for this pharmacy
     const existingMedication = inventoryStatements.getInventoryWithDetails.all(pharmacyId)
@@ -31,46 +85,6 @@ export async function POST(request: NextRequest) {
 
     const newMedicationId = insertResult.lastInsertRowid
 
-    // Add to inventory - ensure pharmacy exists first
-    let pharmacyExists = pharmacyStatements.getById.get(pharmacyId)
-    if (!pharmacyExists) {
-      // Create the pharmacy if it doesn't exist
-      pharmacyStatements.insert.run(
-        pharmacyId,
-        'Farmacity Test',
-        '/placeholder-ha3vf.png',
-        4.5,
-        '30-45 min',
-        350,
-        1500,
-        'Av. Santa Fe 1234, CABA',
-        '0800-333-2762',
-        1, // isOpen
-        '24hs',
-        1, // isOnGuard
-        '24hs todos los días',
-        '0800-333-2762',
-        'Palermo, CABA',
-        '["Delivery 24hs", "Vacunación", "Control de presión", "Inyectables", "Test COVID-19", "Perfumería"]',
-        '["Medicamentos oncológicos", "Nutrición deportiva", "Dermocosmética", "Productos naturales"]',
-        '["Efectivo", "Débito", "Crédito", "Mercado Pago", "Transferencia", "Cheques"]',
-        'https://www.farmacity.com',
-        'info@farmacity.com',
-        null,
-        '["ISO 9001", "Buenas Prácticas de Farmacia", "ANMAT"]',
-        1997,
-        15420,
-        37,
-        1, // hasParking
-        1, // isAccessible
-        '["Español", "Inglés"]',
-        'Dra. María González',
-        'MP 12345',
-        '["OSDE", "Swiss Medical", "Galeno", "Medicus", "IOMA"]',
-        0, // Posx
-        0  // Posy
-      )
-    }
 
     inventoryStatements.insert.run(
       pharmacyId,
@@ -90,6 +104,14 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const { id, pharmacyId, name, genericName, brand, category, requiresPrescription, price, stock, dosage, presentation, laboratory, description } = await request.json()
+
+    if (!id || !pharmacyId) {
+      return NextResponse.json({ error: 'Faltan datos obligatorios (id, pharmacyId).' }, { status: 400 })
+    }
+
+    if (price === undefined || price === null || stock === undefined || stock === null) {
+      return NextResponse.json({ error: 'Debe especificar precio y stock.' }, { status: 400 })
+    }
 
     // Update medication
     medicationStatements.update.run(
@@ -124,10 +146,14 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const { id } = await request.json()
+    const { id, pharmacyId } = await request.json()
+
+    if (!id || !pharmacyId) {
+      return NextResponse.json({ error: 'Faltan parámetros requeridos.' }, { status: 400 })
+    }
 
     // Delete from inventory first
-    inventoryStatements.delete.run('farmacity', id) // Assuming pharmacyId
+    inventoryStatements.delete.run(pharmacyId, id)
 
     // Delete medication
     medicationStatements.delete.run(id)

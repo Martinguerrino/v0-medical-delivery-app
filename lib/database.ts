@@ -205,7 +205,7 @@ db.exec(`
     precio REAL NOT NULL,
     stock INTEGER NOT NULL,
     lastUpdated TEXT NOT NULL,
-    FOREIGN KEY (pharmacyId) REFERENCES pharmacies(id),
+    FOREIGN KEY (pharmacyId) REFERENCES users(id),
     FOREIGN KEY (medicationId) REFERENCES medications(id),
     UNIQUE(pharmacyId, medicationId)
   );
@@ -243,6 +243,7 @@ export const userStatements = {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `),
   getByEmail: db.prepare('SELECT * FROM users WHERE email = ?'),
+  getById: db.prepare('SELECT * FROM users WHERE id = ?'),
   getAll: db.prepare('SELECT * FROM users'),
   update: db.prepare(`
     UPDATE users SET
@@ -401,10 +402,23 @@ export const inventoryStatements = {
   `),
   delete: db.prepare('DELETE FROM inventory WHERE pharmacyId = ? AND medicationId = ?'),
   getInventoryWithDetails: db.prepare(`
-    SELECT i.*, m.name, m.genericName, m.brand, m.category, m.requiresPrescription, m.description, m.dosage, m.presentation, m.activeIngredient, m.laboratory, p.name as pharmacyName
+    SELECT
+      i.*,
+      m.name,
+      m.genericName,
+      m.brand,
+      m.category,
+      m.requiresPrescription,
+      m.description,
+      m.dosage,
+      m.presentation,
+      m.activeIngredient,
+      m.laboratory,
+      COALESCE(u.nombreFarmacia, p.name) AS pharmacyName
     FROM inventory i
     JOIN medications m ON i.medicationId = m.id
-    JOIN pharmacies p ON i.pharmacyId = p.id
+    LEFT JOIN users u ON i.pharmacyId = u.id
+    LEFT JOIN pharmacies p ON i.pharmacyId = p.id
     WHERE i.pharmacyId = ?
   `),
 };
@@ -747,7 +761,7 @@ export const migrateData = () => {
       'ORD-TEST-001',
       new Date().toISOString(),
       'delivered',
-      'farmacity',
+      'farmacia-farmacity',
       'Farmacity',
       1500.00,
       200.00,
@@ -788,7 +802,7 @@ export const migrateData = () => {
       '1',
       2,
       1500.00,
-      'farmacity',
+      'farmacia-farmacity',
       'Farmacity',
       'Av. Corrientes 1234, Buenos Aires',
       new Date().toISOString(),

@@ -6,25 +6,16 @@ try {
     CREATE TABLE inventory (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       pharmacyId TEXT NOT NULL,
-      medicationId INTEGER,
+      medicationId INTEGER NOT NULL,
       precio REAL NOT NULL,
       stock INTEGER NOT NULL,
       lastUpdated TEXT NOT NULL,
-      name TEXT NOT NULL,
-      genericName TEXT,
-      brand TEXT,
-      category TEXT,
-      requiresPrescription INTEGER,
-      description TEXT,
-      dosage TEXT,
-      presentation TEXT,
-      activeIngredient TEXT,
-      laboratory TEXT,
-      farmacia_nombre TEXT,
-      FOREIGN KEY (pharmacyId) REFERENCES users(id)
+      FOREIGN KEY (pharmacyId) REFERENCES users(id),
+      FOREIGN KEY (medicationId) REFERENCES medications(id),
+      UNIQUE (pharmacyId, medicationId)
     );
   `);
-  console.log('Inventory table recreated without medicationId foreign key');
+  console.log('Inventory table recreated con pharmacyId apuntando a users');
 } catch (error) {
   console.log('Error:', error);
 }

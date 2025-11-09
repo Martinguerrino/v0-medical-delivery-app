@@ -13,6 +13,8 @@ import { Plus, Edit, Package, ArrowLeft, CheckCircle, XCircle, AlertTriangle } f
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import type { FarmaciaUser } from "@/lib/types/user-types"
 
 interface Medication {
   id: number
@@ -32,6 +34,7 @@ interface Medication {
 }
 
 export default function InventarioPage() {
+  const router = useRouter()
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -41,19 +44,32 @@ export default function InventarioPage() {
   const [requiresPrescription, setRequiresPrescription] = useState(false)
   const [editRequiresPrescription, setEditRequiresPrescription] = useState(false)
 
-  const farmacia = {
-    id: 'farmacity',
-    role: 'Farmacia' as const,
-    nombreFarmacia: 'Farmacity Test'
-  }
+  const [farmacia, setFarmacia] = useState<FarmaciaUser | null>(null)
 
   useEffect(() => {
-    fetchMedications()
-  }, [])
+    const userData = localStorage.getItem('user')
+    if (userData) {
+      const user = JSON.parse(userData)
+      if (user.role === 'Farmacia') {
+        setFarmacia(user)
+      } else {
+        router.push('/auth')
+      }
+    } else {
+      router.push('/auth')
+    }
+  }, [router])
 
-  async function fetchMedications() {
+  useEffect(() => {
+    if (!farmacia) {
+      return
+    }
+    fetchMedications(farmacia.id)
+  }, [farmacia])
+
+  async function fetchMedications(pharmacyId: string) {
     try {
-      const response = await fetch(`/api/inventory/${farmacia.id}`)
+      const response = await fetch(`/api/inventory/${pharmacyId}`)
       if (response.ok) {
         const data = await response.json()
         setMedications(data)
@@ -66,8 +82,13 @@ export default function InventarioPage() {
   }
 
   async function handleAddMedication(formData: FormData) {
+    if (!farmacia?.id) {
+      setErrorMessage('No se encontró la farmacia del usuario actual.')
+      return
+    }
+
     const data = {
-      pharmacyId: formData.get('pharmacyId'),
+      pharmacyId: farmacia.id,
       name: formData.get('name'),
       genericName: formData.get('genericName'),
       brand: formData.get('brand'),
@@ -97,7 +118,7 @@ export default function InventarioPage() {
       } else {
         setErrorMessage(null)
         setIsDialogOpen(false)
-        fetchMedications() // Refresh the list
+        fetchMedications(farmacia.id) // Refresh the list
       }
     } catch (error) {
       console.error('Error adding medication:', error)
@@ -106,9 +127,14 @@ export default function InventarioPage() {
   }
 
   async function handleUpdateMedication(formData: FormData) {
+    if (!farmacia?.id) {
+      setErrorMessage('No se encontró la farmacia del usuario actual.')
+      return
+    }
+
     const data = {
       id: parseInt(formData.get('id') as string),
-      pharmacyId: formData.get('pharmacyId'),
+      pharmacyId: farmacia.id,
       name: formData.get('name'),
       genericName: formData.get('genericName'),
       brand: formData.get('brand'),
@@ -134,7 +160,7 @@ export default function InventarioPage() {
       if (response.ok) {
         setIsEditDialogOpen(false)
         setEditMedication(null)
-        fetchMedications() // Refresh the list
+        fetchMedications(farmacia.id) // Refresh the list
       } else {
         console.error('Error updating medication')
       }
@@ -144,17 +170,22 @@ export default function InventarioPage() {
   }
 
   async function handleDeleteMedication(id: number) {
+    if (!farmacia?.id) {
+      setErrorMessage('No se encontró la farmacia del usuario actual.')
+      return
+    }
+
     try {
       const response = await fetch('/api/inventory', {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ id }),
+        body: JSON.stringify({ id, pharmacyId: farmacia.id }),
       })
 
       if (response.ok) {
-        fetchMedications() // Refresh the list
+        fetchMedications(farmacia.id)
       } else {
         console.error('Error deleting medication')
       }
@@ -163,9 +194,13 @@ export default function InventarioPage() {
     }
   }
 
+  if (!farmacia) {
+    return null
+  }
+
   return (
     <div className="min-h-screen bg-background">
-      <div className="container mx-auto p-6">
+  <div className="container mx-auto p-6">
         <div className="mb-8">
           <div className="flex items-center gap-4 mb-2">
             <Button

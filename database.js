@@ -224,7 +224,8 @@ export const userStatements = {
     INSERT INTO users (id, email, password, role, nombre, esMayorDeEdad, phone, address, obraSocial, nombreFarmacia, cuit, direccion, telefono, nombreCompleto, dni, vehiculo, createdAt)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `),
-    getByEmail: db.prepare('SELECT * FROM users WHERE email = ?'),
+  getByEmail: db.prepare('SELECT * FROM users WHERE email = ?'),
+  getById: db.prepare('SELECT * FROM users WHERE id = ?'),
     getAll: db.prepare('SELECT * FROM users'),
     update: db.prepare(`
     UPDATE users SET
@@ -513,7 +514,7 @@ export const migrateData = () => {
     }
     // Add sample order for test user
     try {
-        orderStatements.insert.run('ORD-TEST-001', 'ORD-TEST-001', new Date().toISOString(), 'delivered', 'farmacity', 'Farmacity', 1500.00, 200.00, 100.00, 1600.00, 'Calle Falsa 123, Buenos Aires', 1, 1, 'validated', null, new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(), // 2 hours later
+  orderStatements.insert.run('ORD-TEST-001', 'ORD-TEST-001', new Date().toISOString(), 'delivered', 'farmacia-farmacity', 'Farmacity', 1500.00, 200.00, 100.00, 1600.00, 'Calle Falsa 123, Buenos Aires', 1, 1, 'validated', null, new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(), // 2 hours later
         new Date(Date.now() + 1 * 60 * 60 * 1000).toISOString(), // 1 hour ago
         'efectivo', 'OSDE');
         // Add order item
@@ -525,7 +526,7 @@ export const migrateData = () => {
     }
     // Add sample purchase history for test user
     try {
-        purchaseHistoryStatements.insert.run('PUR-TEST-001', 'Ibuprofeno 600mg', '1', 2, 1500.00, 'farmacity', 'Farmacity', 'Av. Corrientes 1234, Buenos Aires', new Date().toISOString(), 'completed', 'REC-TEST-001', 'delivery', 1700.00, 'test-client');
+  purchaseHistoryStatements.insert.run('PUR-TEST-001', 'Ibuprofeno 600mg', '1', 2, 1500.00, 'farmacia-farmacity', 'Farmacity', 'Av. Corrientes 1234, Buenos Aires', new Date().toISOString(), 'completed', 'REC-TEST-001', 'delivery', 1700.00, 'test-client');
     }
     catch (error) {
         console.log('Test purchase already exists or error:', error);
