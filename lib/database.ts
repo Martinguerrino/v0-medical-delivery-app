@@ -414,12 +414,49 @@ export const inventoryStatements = {
       m.presentation,
       m.activeIngredient,
       m.laboratory,
-      COALESCE(u.nombreFarmacia, p.name) AS pharmacyName
+      COALESCE(u.nombreFarmacia, p.name) AS pharmacyName,
+      p.id AS pharmacyRecordId,
+      p.rating AS pharmacyRating,
+      p.deliveryTime,
+      p.deliveryFee,
+      p.isOpen AS pharmacyIsOpen,
+      p.minOrder,
+      p.address AS pharmacyAddress,
+      p.phone AS pharmacyPhone,
+      p.logo AS pharmacyLogo
     FROM inventory i
     JOIN medications m ON i.medicationId = m.id
     LEFT JOIN users u ON i.pharmacyId = u.id
     LEFT JOIN pharmacies p ON i.pharmacyId = p.id
     WHERE i.pharmacyId = ?
+  `),
+  getAllWithDetails: db.prepare(`
+    SELECT
+      i.*,
+      m.name,
+      m.genericName,
+      m.brand,
+      m.category,
+      m.requiresPrescription,
+      m.description,
+      m.dosage,
+      m.presentation,
+      m.activeIngredient,
+      m.laboratory,
+      COALESCE(u.nombreFarmacia, p.name) AS pharmacyName,
+      p.id AS pharmacyRecordId,
+      p.rating AS pharmacyRating,
+      p.deliveryTime,
+      p.deliveryFee,
+      p.isOpen AS pharmacyIsOpen,
+      p.minOrder,
+      p.address AS pharmacyAddress,
+      p.phone AS pharmacyPhone,
+      p.logo AS pharmacyLogo
+    FROM inventory i
+    JOIN medications m ON i.medicationId = m.id
+    LEFT JOIN users u ON i.pharmacyId = u.id
+    LEFT JOIN pharmacies p ON i.pharmacyId = p.id
   `),
 };
 

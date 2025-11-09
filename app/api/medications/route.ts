@@ -5,6 +5,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const pharmacyId = searchParams.get('pharmacyId')
+    const medicationIdParam = searchParams.get('medicationId')
 
     if (pharmacyId) {
       // Get medications available in this pharmacy using inventory table
@@ -18,14 +19,72 @@ export async function GET(request: NextRequest) {
       }))
       return NextResponse.json(pharmacyMeds)
     } else {
-      // Get all medications (for admin/general view)
-      const medications = medicationStatements.getAll.all()
-      const medicationsWithStock = medications.map((med: any) => ({
-        ...med,
-        stock: Math.floor(Math.random() * 100) + 1, // Random stock for demo
-        inStock: Math.random() > 0.1, // 90% chance of being in stock
+      const inventoryItems = inventoryStatements.getAllWithDetails.all()
+
+      const medicationsMap = new Map<number, any>()
+
+      for (const item of inventoryItems) {
+        if (medicationIdParam && Number.parseInt(medicationIdParam, 10) !== item.medicationId) {
+          continue
+        }
+
+        const medicationId = item.medicationId
+        if (!medicationsMap.has(medicationId)) {
+          medicationsMap.set(medicationId, {
+            id: medicationId,
+            name: item.name,
+            genericName: item.genericName,
+            brand: item.brand,
+            category: item.category,
+            requiresPrescription: Boolean(item.requiresPrescription),
+            description: item.description,
+            dosage: item.dosage,
+            presentation: item.presentation,
+            activeIngredient: item.activeIngredient,
+            laboratory: item.laboratory,
+            prices: [] as any[],
+          })
+        }
+
+        const medicationEntry = medicationsMap.get(medicationId)
+        const slugCandidate = typeof item.pharmacyId === 'string' && item.pharmacyId.startsWith('farmacia-')
+          ? item.pharmacyId.replace('farmacia-', '')
+          : item.pharmacyId
+        const pharmacySlug = item.pharmacyRecordId || slugCandidate
+
+        medicationEntry.prices.push({
+          pharmacyId: item.pharmacyId,
+          pharmacySlug,
+          pharmacyName: item.pharmacyName || pharmacySlug,
+          price: item.precio,
+          discountedPrice: null,
+          stock: item.stock,
+          inStock: item.stock > 0,
+          lastUpdated: item.lastUpdated,
+          rating: item.pharmacyRating ?? null,
+          deliveryFee: item.deliveryFee ?? null,
+          deliveryTime: item.deliveryTime ?? null,
+          isOpen: item.pharmacyIsOpen != null ? Boolean(item.pharmacyIsOpen) : null,
+          minOrder: item.minOrder ?? null,
+          address: item.pharmacyAddress ?? null,
+          phone: item.pharmacyPhone ?? null,
+          logo: item.pharmacyLogo ?? null,
+        })
+      }
+
+      const medications = Array.from(medicationsMap.values()).map((medication) => ({
+        ...medication,
+        prices: medication.prices.sort((a: any, b: any) => a.price - b.price),
       }))
-      return NextResponse.json(medicationsWithStock)
+
+      if (medicationIdParam) {
+        if (medications.length === 0) {
+          return NextResponse.json({ error: 'Medicamento no encontrado' }, { status: 404 })
+        }
+        return NextResponse.json(medications[0])
+      }
+
+      return NextResponse.json(medications)
     }
   } catch (error) {
     console.error('Error fetching medications:', error)

@@ -10,19 +10,20 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Upload, FileText, CheckCircle2, AlertCircle, X } from "lucide-react"
-import { pharmacies } from "@/lib/data/pharmacies"
 import { calculateFinalPrice } from "@/lib/utils/price-calculator"
 import { insuranceOptions } from "@/lib/data/insurance"
-import type { MedicationMultiPharmacy } from "@/lib/data/medications-multi-pharmacy"
+import type { ClientMedication, ClientMedicationPrice } from "@/lib/types/client-medication"
 
 interface OrderFormProps {
-  medication: MedicationMultiPharmacy
-  pharmacyId: string
+  medication: ClientMedication
+  pharmacyPrice: ClientMedicationPrice
+  pharmacyName: string
+  deliveryFee: number
   onSuccess: () => void
   onCancel: () => void
 }
 
-export function OrderForm({ medication, pharmacyId, onSuccess, onCancel }: OrderFormProps) {
+export function OrderForm({ medication, pharmacyPrice, pharmacyName, deliveryFee, onSuccess, onCancel }: OrderFormProps) {
   const [formData, setFormData] = useState({
     quantity: 1,
     deliveryAddress: "",
@@ -34,22 +35,18 @@ export function OrderForm({ medication, pharmacyId, onSuccess, onCancel }: Order
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [uploadSuccess, setUploadSuccess] = useState(false)
 
-  const pharmacy = pharmacies.find((p) => p.id === pharmacyId)
-  const medicationPrice = medication.prices.find((p) => p.pharmacyId === pharmacyId)
-
   const user = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("user") || "{}") : {}
   const userInsurance = user.obraSocial || ""
-  const userInsuranceData = insuranceOptions.find((ins) => ins.name.toLowerCase() === userInsurance.toLowerCase())
+  const normalizedInsurance = userInsurance.trim().toLowerCase()
+  const userInsuranceData =
+    insuranceOptions.find((ins) => ins.id.toLowerCase() === normalizedInsurance) ||
+    insuranceOptions.find((ins) => ins.name.toLowerCase() === normalizedInsurance)
 
-  const unitPrice = medicationPrice?.discountedPrice || medicationPrice?.price || 0
-  const finalUnitPrice = calculateFinalPrice(
-    unitPrice,
-    userInsuranceData?.discount || 0,
-    userInsuranceData?.copayment || 0,
-  )
+  const effectiveDeliveryFee = Number.isFinite(deliveryFee) ? deliveryFee : pharmacyPrice.deliveryFee ?? 0
+  const priceCalculation = calculateFinalPrice(pharmacyPrice, userInsuranceData?.id || "")
+  const finalUnitPrice = priceCalculation.finalPrice
   const subtotal = finalUnitPrice * formData.quantity
-  const deliveryFee = pharmacy?.deliveryFee || 0
-  const total = subtotal + deliveryFee
+  const total = subtotal + effectiveDeliveryFee
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -115,11 +112,11 @@ export function OrderForm({ medication, pharmacyId, onSuccess, onCancel }: Order
         userId: user.email,
         medicationId: medication.id,
         medicationName: medication.name,
-        pharmacyId: pharmacyId,
-        pharmacyName: pharmacy?.name,
+        pharmacyId: pharmacyPrice.pharmacyId,
+        pharmacyName,
         quantity: formData.quantity,
         unitPrice: finalUnitPrice,
-        deliveryFee: deliveryFee,
+        deliveryFee: effectiveDeliveryFee,
         total: total,
         deliveryAddress: formData.deliveryAddress,
         deliveryInstructions: formData.deliveryInstructions,
@@ -137,7 +134,7 @@ export function OrderForm({ medication, pharmacyId, onSuccess, onCancel }: Order
     }, 1500)
   }
 
-  if (!pharmacy || !medicationPrice) {
+  if (!pharmacyPrice) {
     return (
       <Alert variant="destructive">
         <AlertCircle className="h-4 w-4" />
@@ -156,7 +153,7 @@ export function OrderForm({ medication, pharmacyId, onSuccess, onCancel }: Order
             <span className="font-medium">Medicamento:</span> {medication.name}
           </p>
           <p>
-            <span className="font-medium">Farmacia:</span> {pharmacy.name}
+            <span className="font-medium">Farmacia:</span> {pharmacyName}
           </p>
           <p>
             <span className="font-medium">Precio unitario:</span> ${finalUnitPrice.toLocaleString()}
@@ -289,7 +286,7 @@ export function OrderForm({ medication, pharmacyId, onSuccess, onCancel }: Order
         </div>
         <div className="flex justify-between text-sm">
           <span>Envío</span>
-          <span>${deliveryFee.toLocaleString()}</span>
+          <span>${effectiveDeliveryFee.toLocaleString()}</span>
         </div>
         <div className="flex justify-between font-bold text-lg pt-2 border-t">
           <span>Total</span>

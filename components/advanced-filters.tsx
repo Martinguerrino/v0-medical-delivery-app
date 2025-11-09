@@ -9,13 +9,14 @@ import { Slider } from "@/components/ui/slider"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Filter, X, Shield, Clock, Truck, Star } from "lucide-react"
-import { pharmacies } from "@/lib/data/pharmacies"
 import { insuranceOptions } from "@/lib/data/insurance"
 import { formatPrice } from "@/lib/utils/price-calculator"
+import type { ClientPharmacyMeta } from "@/lib/types/client-medication"
 
 interface AdvancedFiltersProps {
   onFiltersChange: (filters: FilterState) => void
   currentFilters: FilterState
+  pharmacies: ClientPharmacyMeta[]
 }
 
 export interface FilterState {
@@ -28,7 +29,7 @@ export interface FilterState {
   maxPrice: number
 }
 
-export function AdvancedFilters({ onFiltersChange, currentFilters }: AdvancedFiltersProps) {
+export function AdvancedFilters({ onFiltersChange, currentFilters, pharmacies }: AdvancedFiltersProps) {
   const [userInsurance, setUserInsurance] = useState<string>("")
   const [localFilters, setLocalFilters] = useState<FilterState>(currentFilters)
 
@@ -39,6 +40,10 @@ export function AdvancedFilters({ onFiltersChange, currentFilters }: AdvancedFil
       setUserInsurance(userData.obraSocial || "")
     }
   }, [])
+
+  useEffect(() => {
+    setLocalFilters(currentFilters)
+  }, [currentFilters])
 
   const userInsuranceData = insuranceOptions.find((ins) => ins.name.toLowerCase() === userInsurance.toLowerCase())
 

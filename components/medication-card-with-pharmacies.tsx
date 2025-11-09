@@ -5,49 +5,70 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Building2, Clock, Star, Truck, Package, ShoppingCart, Check } from "lucide-react"
-import { pharmacies } from "@/lib/data/pharmacies"
+import { pharmacies as fallbackPharmacies } from "@/lib/data/pharmacies"
 import { insuranceOptions } from "@/lib/data/insurance"
-import { calculateFinalPrice } from "@/lib/utils/price-calculator"
-import type { MedicationMultiPharmacy } from "@/lib/data/medications-multi-pharmacy"
+import { calculateFinalPrice, type PriceCalculation } from "@/lib/utils/price-calculator"
+import type { ClientMedication, ClientMedicationPrice } from "@/lib/types/client-medication"
 import { OrderForm } from "./order-form"
 
 interface MedicationCardWithPharmaciesProps {
-  medication: MedicationMultiPharmacy
+  medication: ClientMedication
 }
 
+interface AvailablePharmacyEntry {
+  id: string
+  name: string
+  rating: number
+  deliveryTime: string | null
+  deliveryFee: number
+  isOpen: boolean
+  originalPrice: number
+  hasDiscount: boolean
+  priceCalculation: PriceCalculation
+  priceData: ClientMedicationPrice
+}
+
+const fallbackPharmacyMap = new Map(
+  fallbackPharmacies.flatMap((pharmacy) => [
+    [pharmacy.id, pharmacy],
+    [pharmacy.id.toLowerCase(), pharmacy],
+  ]),
+)
+
 export function MedicationCardWithPharmacies({ medication }: MedicationCardWithPharmaciesProps) {
-  const [selectedPharmacy, setSelectedPharmacy] = useState<string | null>(null)
+  const [selectedPharmacy, setSelectedPharmacy] = useState<AvailablePharmacyEntry | null>(null)
   const [showOrderForm, setShowOrderForm] = useState(false)
 
   const user = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("user") || "{}") : {}
   const userInsurance = user.obraSocial || ""
   const userInsuranceData = insuranceOptions.find((ins) => ins.name.toLowerCase() === userInsurance.toLowerCase())
 
-  const availablePharmacies = medication.prices
+  const availablePharmacies: AvailablePharmacyEntry[] = medication.prices
     .filter((price) => price.inStock)
     .map((price) => {
-      const pharmacy = pharmacies.find((p) => p.id === price.pharmacyId)
-      if (!pharmacy) return null
+      const fallback =
+        fallbackPharmacyMap.get(price.pharmacyId) ||
+        (price.pharmacySlug ? fallbackPharmacyMap.get(price.pharmacySlug) : undefined)
 
-      const finalPrice = calculateFinalPrice(
-        price.discountedPrice || price.price,
-        userInsuranceData?.discount || 0,
-        userInsuranceData?.copayment || 0,
-      )
+      const priceCalculation = calculateFinalPrice(price, userInsuranceData?.id || "")
 
       return {
-        ...pharmacy,
-        price: price.discountedPrice || price.price,
+        id: price.pharmacyId,
+        name: price.pharmacyName ?? fallback?.name ?? price.pharmacyId,
+        rating: price.rating ?? fallback?.rating ?? 0,
+        deliveryTime: price.deliveryTime ?? fallback?.deliveryTime ?? null,
+        deliveryFee: price.deliveryFee ?? fallback?.deliveryFee ?? 0,
+        isOpen: price.isOpen ?? fallback?.isOpen ?? false,
         originalPrice: price.price,
-        finalPrice,
-        hasDiscount: !!price.discountedPrice,
+        hasDiscount: typeof price.discountedPrice === "number" && price.discountedPrice !== price.price,
+        priceCalculation,
+        priceData: price,
       }
     })
-    .filter(Boolean)
-    .sort((a, b) => a!.finalPrice - b!.finalPrice)
+    .sort((a, b) => a.priceCalculation.finalPrice - b.priceCalculation.finalPrice)
 
-  const handlePharmacyClick = (pharmacyId: string) => {
-    setSelectedPharmacy(pharmacyId)
+  const handlePharmacyClick = (entry: AvailablePharmacyEntry) => {
+    setSelectedPharmacy(entry)
     setShowOrderForm(true)
   }
 
@@ -92,10 +113,10 @@ export function MedicationCardWithPharmacies({ medication }: MedicationCardWithP
             ) : (
               availablePharmacies.map((pharmacy) => (
                 <button
-                  key={pharmacy!.id}
-                  onClick={() => handlePharmacyClick(pharmacy!.id)}
+                  key={pharmacy.id}
+                  onClick={() => handlePharmacyClick(pharmacy)}
                   className={`w-full border rounded-lg p-3 transition-all text-left ${
-                    selectedPharmacy === pharmacy!.id
+                    selectedPharmacy?.id === pharmacy.id
                       ? "border-primary bg-primary/5 ring-2 ring-primary/20"
                       : "hover:border-primary hover:bg-muted/50"
                   }`}
@@ -103,14 +124,14 @@ export function MedicationCardWithPharmacies({ medication }: MedicationCardWithP
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <h5 className="font-semibold">{pharmacy!.name}</h5>
-                        {selectedPharmacy === pharmacy!.id && (
+                        <h5 className="font-semibold">{pharmacy.name}</h5>
+                        {selectedPharmacy?.id === pharmacy.id && (
                           <Badge className="bg-primary text-primary-foreground text-xs">
                             <Check className="h-3 w-3 mr-1" />
                             Seleccionada
                           </Badge>
                         )}
-                        {pharmacy!.isOpen && (
+                        {pharmacy.isOpen && (
                           <Badge variant="secondary" className="text-xs">
                             Abierto
                           </Badge>
@@ -119,24 +140,26 @@ export function MedicationCardWithPharmacies({ medication }: MedicationCardWithP
                       <div className="flex items-center gap-3 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                          {pharmacy!.rating}
+                          {pharmacy.rating.toFixed(1)}
                         </span>
                         <span className="flex items-center gap-1">
                           <Clock className="h-3 w-3" />
-                          {pharmacy!.deliveryTime}
+                          {pharmacy.deliveryTime ?? "-"}
                         </span>
                         <span className="flex items-center gap-1">
-                          <Truck className="h-3 w-3" />${pharmacy!.deliveryFee}
+                          <Truck className="h-3 w-3" />${pharmacy.deliveryFee.toLocaleString()}
                         </span>
                       </div>
                     </div>
                     <div className="text-right">
-                      {pharmacy!.hasDiscount && (
+                      {pharmacy.hasDiscount && (
                         <p className="text-xs text-muted-foreground line-through">
-                          ${pharmacy!.originalPrice.toLocaleString()}
+                          ${pharmacy.originalPrice.toLocaleString()}
                         </p>
                       )}
-                      <p className="text-lg font-bold text-primary">${pharmacy!.finalPrice.toLocaleString()}</p>
+                      <p className="text-lg font-bold text-primary">
+                        ${pharmacy.priceCalculation.finalPrice.toLocaleString()}
+                      </p>
                       {userInsurance && <p className="text-xs text-muted-foreground">con {userInsurance}</p>}
                     </div>
                   </div>
@@ -151,7 +174,15 @@ export function MedicationCardWithPharmacies({ medication }: MedicationCardWithP
         </CardContent>
       </Card>
 
-      <Dialog open={showOrderForm} onOpenChange={setShowOrderForm}>
+      <Dialog
+        open={showOrderForm}
+        onOpenChange={(nextOpen) => {
+          setShowOrderForm(nextOpen)
+          if (!nextOpen) {
+            setSelectedPharmacy(null)
+          }
+        }}
+      >
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Realizar Pedido</DialogTitle>
@@ -159,7 +190,9 @@ export function MedicationCardWithPharmacies({ medication }: MedicationCardWithP
           {selectedPharmacy && (
             <OrderForm
               medication={medication}
-              pharmacyId={selectedPharmacy}
+              pharmacyPrice={selectedPharmacy.priceData}
+              pharmacyName={selectedPharmacy.name}
+              deliveryFee={selectedPharmacy.deliveryFee}
               onSuccess={() => {
                 setShowOrderForm(false)
                 setSelectedPharmacy(null)
