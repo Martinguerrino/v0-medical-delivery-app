@@ -1,376 +1,441 @@
-"use client"
+﻿"use client"
 
-import { useState, useEffect } from "react"
+import { useCallback, useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Package, CheckCircle, Clock, MapPin, MessageSquare, FileText, AlertTriangle, XCircle } from "lucide-react"
+import {
+  Package,
+  CheckCircle,
+  Clock,
+  MapPin,
+  MessageSquare,
+  FileText,
+  AlertTriangle,
+  XCircle,
+  Truck,
+  RefreshCcw,
+} from "lucide-react"
+import type { LucideIcon } from "lucide-react"
+import type { OrderStatus, OrderWithItems, PrescriptionStatus } from "@/lib/types/orders"
 
-interface OrderItem {
-  medicationId: number
-  medicationName: string
-  quantity: number
-  unitPrice: number
-  finalPrice: number
+const STATUS_CONFIG: Record<OrderStatus, { label: string; icon: LucideIcon; className: string; iconColor: string }> = {
+  processing: {
+    label: "En proceso",
+    icon: Clock,
+    className: "bg-blue-100 text-blue-800 border border-blue-200",
+    iconColor: "text-blue-600",
+  },
+  accepted: {
+    label: "Aceptado",
+    icon: Package,
+    className: "bg-purple-100 text-purple-800 border border-purple-200",
+    iconColor: "text-purple-600",
+  },
+  delivering: {
+    label: "En camino",
+    icon: Truck,
+    className: "bg-amber-100 text-amber-800 border border-amber-200",
+    iconColor: "text-amber-600",
+  },
+  delivered: {
+    label: "Entregado",
+    icon: CheckCircle,
+    className: "bg-green-100 text-green-800 border border-green-200",
+    iconColor: "text-green-600",
+  },
+  cancelled: {
+    label: "Cancelado",
+    icon: AlertTriangle,
+    className: "bg-red-100 text-red-800 border border-red-200",
+    iconColor: "text-red-600",
+  },
 }
 
-interface Order {
-  id: string
-  userId: string
-  medicationId: number
-  medicationName: string
-  pharmacyId: string
-  pharmacyName: string
-  quantity: number
-  unitPrice: number
-  deliveryFee: number
-  total: number
-  deliveryAddress: string
-  deliveryInstructions?: string
-  paymentMethod: string
-  prescriptionFileName: string
-  prescriptionStatus: "pending" | "approved" | "rejected"
-  prescriptionRejectionReason?: string
-  orderStatus: "pending" | "processing" | "completed" | "delivered" | "cancelled"
-  createdAt: string
-  estimatedDelivery?: string
-  actualDelivery?: string
+const PRESCRIPTION_BADGE_CONFIG: Record<
+  PrescriptionStatus,
+  { label: string; icon: LucideIcon; className: string }
+> = {
+  pending: { label: "Receta pendiente", icon: Clock, className: "bg-yellow-100 text-yellow-800" },
+  approved: { label: "Receta aprobada", icon: CheckCircle, className: "bg-green-100 text-green-800" },
+  rejected: { label: "Receta rechazada", icon: XCircle, className: "bg-red-100 text-red-800" },
+}
+
+const formatDateTime = (value?: string | null) => {
+  if (!value) return "-"
+  return new Date(value).toLocaleString("es-AR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
+const renderStatusBadge = (status: OrderStatus) => {
+  const config = STATUS_CONFIG[status]
+  const StatusIcon = config.icon
+
+  return (
+    <Badge className={config.className}>
+      <StatusIcon className="mr-1 h-3 w-3" />
+      {config.label}
+    </Badge>
+  )
+}
+
+const renderStatusIcon = (status: OrderStatus) => {
+  const config = STATUS_CONFIG[status]
+  const StatusIcon = config.icon
+
+  return <StatusIcon className={`h-5 w-5 ${config.iconColor}`} />
+}
+
+const renderPrescriptionBadge = (status: PrescriptionStatus) => {
+  const config = PRESCRIPTION_BADGE_CONFIG[status]
+  if (!config) return null
+  const Icon = config.icon
+
+  return (
+    <Badge className={config.className}>
+      <Icon className="mr-1 h-3 w-3" />
+      {config.label}
+    </Badge>
+  )
 }
 
 export function OrderTracking() {
-  const [orders, setOrders] = useState<Order[]>([])
-  const [user, setUser] = useState<any>(null)
+  const router = useRouter()
+  const [orders, setOrders] = useState<OrderWithItems[]>([])
+  const [user, setUser] = useState<Record<string, unknown> | null>(null)
+  const [fetchError, setFetchError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [hasLoadedUser, setHasLoadedUser] = useState(false)
 
   useEffect(() => {
-    const userData = localStorage.getItem("user")
-    if (userData) {
-      const parsedUser = JSON.parse(userData)
-      setUser(parsedUser)
-
-      const storedOrders = localStorage.getItem("orders")
-      if (storedOrders) {
-        const allOrders = JSON.parse(storedOrders)
-        const userOrders = allOrders.filter((order: Order) => order.userId === parsedUser.email)
-        setOrders(userOrders)
+    try {
+      const storedUser = typeof window !== "undefined" ? window.localStorage.getItem("user") : null
+      if (storedUser) {
+        setUser(JSON.parse(storedUser) as Record<string, unknown>)
       }
+    } catch (error) {
+      console.error("Error parsing user from localStorage", error)
+    } finally {
+      setHasLoadedUser(true)
     }
   }, [])
 
-  const getStatusBadge = (status: Order["orderStatus"]) => {
-    switch (status) {
-      case "pending":
-        return <Badge className="bg-yellow-100 text-yellow-800">Pendiente</Badge>
-      case "processing":
-        return <Badge className="bg-blue-100 text-blue-800">Procesando</Badge>
-      case "completed":
-        return <Badge className="bg-purple-100 text-purple-800">Completado</Badge>
-      case "delivered":
-        return <Badge className="bg-green-100 text-green-800">Entregado</Badge>
-      case "cancelled":
-        return <Badge variant="destructive">Cancelado</Badge>
-      default:
-        return <Badge variant="secondary">Desconocido</Badge>
-    }
-  }
+  const fetchOrders = useCallback(
+    async (showGlobalLoading = true) => {
+      const identifier = user?.id
+      if (typeof identifier !== "string" && typeof identifier !== "number") {
+        return
+      }
 
-  const getPrescriptionStatusBadge = (status: Order["prescriptionStatus"]) => {
-    switch (status) {
-      case "approved":
-        return (
-          <Badge className="bg-green-100 text-green-800">
-            <CheckCircle className="h-3 w-3 mr-1" />
-            Receta Aprobada
-          </Badge>
-        )
-      case "pending":
-        return (
-          <Badge className="bg-yellow-100 text-yellow-800">
-            <Clock className="h-3 w-3 mr-1" />
-            Receta Pendiente
-          </Badge>
-        )
-      case "rejected":
-        return (
-          <Badge className="bg-red-100 text-red-800">
-            <XCircle className="h-3 w-3 mr-1" />
-            Receta Rechazada
-          </Badge>
-        )
-      default:
-        return null
-    }
-  }
+      setFetchError(null)
+      if (showGlobalLoading) {
+        setIsLoading(true)
+      } else {
+        setIsRefreshing(true)
+      }
 
-  const getStatusIcon = (status: Order["orderStatus"]) => {
-    switch (status) {
-      case "pending":
-      case "processing":
-        return <Clock className="h-5 w-5 text-blue-600" />
-      case "completed":
-        return <Package className="h-5 w-5 text-purple-600" />
-      case "delivered":
-        return <CheckCircle className="h-5 w-5 text-green-600" />
-      case "cancelled":
-        return <AlertTriangle className="h-5 w-5 text-red-600" />
-      default:
-        return <Clock className="h-5 w-5 text-gray-600" />
-    }
-  }
+      try {
+        const customerId = encodeURIComponent(String(identifier))
+        const response = await fetch(`/api/orders?customerId=${customerId}`, { cache: "no-store" })
+        const payload = (await response.json().catch(() => null)) as unknown
 
-  const activeOrders = orders.filter((order) => order.orderStatus !== "delivered" && order.orderStatus !== "cancelled")
-  const completedOrders = orders.filter(
-    (order) => order.orderStatus === "delivered" || order.orderStatus === "cancelled",
+        if (!response.ok) {
+          const message = (payload as { error?: string } | null)?.error ?? "No se pudo obtener los pedidos"
+          throw new Error(message)
+        }
+
+        if (!Array.isArray(payload)) {
+          throw new Error("Formato de respuesta inválido")
+        }
+
+        setOrders(payload as OrderWithItems[])
+      } catch (error) {
+        console.error("Error fetching orders", error)
+        setFetchError(error instanceof Error ? error.message : "No se pudieron cargar los pedidos")
+      } finally {
+        if (showGlobalLoading) {
+          setIsLoading(false)
+        } else {
+          setIsRefreshing(false)
+        }
+      }
+    },
+    [user?.id],
   )
+
+  useEffect(() => {
+    if (!hasLoadedUser) return
+
+    const identifier = user?.id
+    if (typeof identifier !== "string" && typeof identifier !== "number") {
+      setIsLoading(false)
+      return
+    }
+
+    fetchOrders().catch((error) => console.error("Error inicial al cargar pedidos", error))
+  }, [fetchOrders, hasLoadedUser, user?.id])
+
+  const handleRefresh = useCallback(async () => {
+    await fetchOrders(false)
+  }, [fetchOrders])
+
+  const activeOrders = orders.filter((order) => order.status !== "delivered" && order.status !== "cancelled")
+  const completedOrders = orders.filter((order) => order.status === "delivered" || order.status === "cancelled")
+
+  const renderOrderCard = (order: OrderWithItems) => (
+    <Card key={order.id} className="transition-shadow hover:shadow-md">
+      <CardHeader>
+        <div className="flex items-center justify-between gap-4">
+          <div className="space-y-1">
+            <CardTitle className="text-lg">Pedido #{order.orderNumber ?? order.id}</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Realizado el {formatDateTime(order.createdAt)} | ${order.total.toLocaleString()}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            {renderStatusIcon(order.status)}
+            {renderStatusBadge(order.status)}
+          </div>
+        </div>
+      </CardHeader>
+
+      <CardContent className="space-y-4">
+        {order.prescriptionRequired && (
+          <Alert className={order.prescriptionStatus === "rejected" ? "border-red-200 bg-red-50" : ""}>
+            <FileText className="h-4 w-4" />
+            <AlertDescription>
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium">Estado de la receta médica</p>
+                    {renderPrescriptionBadge(order.prescriptionStatus)}
+                  </div>
+                  {order.prescriptionStatus === "pending" && (
+                    <p className="text-sm text-muted-foreground">
+                      La farmacia está validando tu receta. Esto puede tomar unos minutos.
+                    </p>
+                  )}
+                  {order.prescriptionStatus === "approved" && (
+                    <p className="text-sm text-muted-foreground">
+                      Tu receta fue aprobada. La farmacia continuará con la preparación del pedido.
+                    </p>
+                  )}
+                  {order.prescriptionStatus === "rejected" && (
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-red-700">
+                        Motivo: {order.prescriptionRejectionReason || "Receta no válida"}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Sube una nueva receta válida para que la farmacia pueda continuar.
+                      </p>
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Archivo: {order.prescriptionFileName || "Pendiente de carga"}
+                  </p>
+                </div>
+                {order.prescriptionStatus === "rejected" && (
+                  <Button size="sm" variant="outline" onClick={() => router.push("/historial")}>
+                    Cargar nueva receta
+                  </Button>
+                )}
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <div className="grid gap-4 rounded-lg bg-muted/50 p-4 md:grid-cols-2">
+          <div className="flex items-start gap-2">
+            <MapPin className="h-4 w-4 text-muted-foreground" />
+            <div>
+              <p className="text-sm font-medium">Dirección de entrega</p>
+              <p className="text-sm text-muted-foreground">{order.deliveryAddress}</p>
+              {order.deliveryInstructions && (
+                <p className="mt-1 text-xs italic text-muted-foreground">{order.deliveryInstructions}</p>
+              )}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              <div>
+                <p className="text-sm font-medium">Método de pago</p>
+                <p className="text-sm text-muted-foreground capitalize">
+                  {order.paymentMethod ? order.paymentMethod.replace(/-/g, " ") : "No especificado"}
+                </p>
+              </div>
+            </div>
+            {order.estimatedDelivery && (
+              <p className="text-xs text-muted-foreground">Entrega estimada: {formatDateTime(order.estimatedDelivery)}</p>
+            )}
+            {order.actualDelivery && (
+              <p className="text-xs text-green-600">Entregado: {formatDateTime(order.actualDelivery)}</p>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 rounded-lg border bg-background p-3">
+          <Package className="h-8 w-8 text-primary" />
+          <div>
+            <p className="font-medium">{order.pharmacyName}</p>
+            <p className="text-sm text-muted-foreground">Farmacia</p>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <h4 className="font-medium">Productos</h4>
+          {order.items.map((item) => (
+            <div
+              key={item.id ?? `${item.orderId}-${item.medicationId}`}
+              className="flex items-center justify-between rounded border bg-background p-3"
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded bg-muted">
+                  <Package className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">{item.medicationName}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {item.brand ? `${item.brand} - ` : ""}Cantidad: {item.quantity}
+                  </p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-medium">${item.finalPrice.toLocaleString()}</p>
+                {item.insuranceSavings > 0 && (
+                  <p className="text-xs text-green-600">Ahorro: ${item.insuranceSavings.toLocaleString()}</p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="space-y-2 border-t pt-4">
+          <div className="flex justify-between text-sm">
+            <span>Subtotal</span>
+            <span>${order.subtotal.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span>Envío</span>
+            <span>${order.deliveryFee.toLocaleString()}</span>
+          </div>
+          {order.insuranceDiscount > 0 && (
+            <div className="flex justify-between text-sm text-green-600">
+              <span>Descuento obra social</span>
+              <span>- ${order.insuranceDiscount.toLocaleString()}</span>
+            </div>
+          )}
+          <div className="flex justify-between border-t pt-2 text-lg font-bold">
+            <span>Total</span>
+            <span className="text-primary">${order.total.toLocaleString()}</span>
+          </div>
+          {order.insuranceUsed && (
+            <p className="text-xs text-muted-foreground">Obra social utilizada: {order.insuranceUsed}</p>
+          )}
+        </div>
+
+        <div className="flex gap-2 border-t pt-4">
+          <Button variant="outline" size="sm">
+            <MessageSquare className="mr-2 h-4 w-4" />
+            Contactar farmacia
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => router.push(`/pedidos/${order.id}`)}>
+            Ver detalles
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-12">
+        <div className="text-center text-muted-foreground">Cargando pedidos...</div>
+      </div>
+    )
+  }
+
+  if (hasLoadedUser && (typeof user?.id !== "string" && typeof user?.id !== "number")) {
+    return (
+      <Card>
+        <CardContent className="space-y-4 py-12 text-center">
+          <Package className="mx-auto h-16 w-16 text-muted-foreground" />
+          <div>
+            <h3 className="text-lg font-semibold">Inicia sesión para ver tus pedidos</h3>
+            <p className="text-sm text-muted-foreground">
+              Debes estar autenticado como cliente para acceder al seguimiento de pedidos.
+            </p>
+          </div>
+          <Button onClick={() => router.push("/auth")} className="inline-flex items-center gap-2">
+            Ir a iniciar sesión
+          </Button>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <div className="space-y-6">
+      {fetchError && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>{fetchError}</AlertDescription>
+        </Alert>
+      )}
+
       <Tabs defaultValue="active" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="active">Pedidos Activos ({activeOrders.length})</TabsTrigger>
-          <TabsTrigger value="completed">Historial ({completedOrders.length})</TabsTrigger>
-        </TabsList>
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <TabsList className="grid w-full grid-cols-2 md:w-auto md:min-w-[320px]">
+            <TabsTrigger value="active">Pedidos activos ({activeOrders.length})</TabsTrigger>
+            <TabsTrigger value="completed">Historial ({completedOrders.length})</TabsTrigger>
+          </TabsList>
+          <Button
+            variant="outline"
+            size="sm"
+            className="inline-flex items-center gap-2 self-end md:self-auto"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+          >
+            <RefreshCcw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+            Actualizar
+          </Button>
+        </div>
 
         <TabsContent value="active" className="space-y-4">
           {activeOrders.length === 0 ? (
             <Card>
-              <CardContent className="text-center py-12">
-                <Package className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No tienes pedidos activos</h3>
-                <p className="text-muted-foreground mb-4">Cuando realices un pedido, aparecerá aquí</p>
-                <Button onClick={() => (window.location.href = "/medicamentos")}>Ver catálogo</Button>
+              <CardContent className="py-12 text-center">
+                <Package className="mx-auto mb-4 h-16 w-16 text-muted-foreground" />
+                <h3 className="mb-2 text-lg font-semibold">No tienes pedidos activos</h3>
+                <p className="mb-4 text-muted-foreground">Cuando realices un pedido, lo verás aquí.</p>
+                <Button onClick={() => router.push("/medicamentos")}>Ver catálogo</Button>
               </CardContent>
             </Card>
           ) : (
-            activeOrders.map((order) => (
-              <Card key={order.id} className="hover:shadow-md transition-shadow">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <CardTitle className="text-lg">{order.id}</CardTitle>
-                      <p className="text-muted-foreground">
-                        Pedido realizado el {new Date(order.createdAt).toLocaleDateString()} • $
-                        {order.total.toLocaleString()}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {getStatusIcon(order.orderStatus)}
-                      {getStatusBadge(order.orderStatus)}
-                    </div>
-                  </div>
-                </CardHeader>
-
-                <CardContent className="space-y-4">
-                  <Alert className={order.prescriptionStatus === "rejected" ? "border-red-200 bg-red-50" : ""}>
-                    <FileText className="h-4 w-4" />
-                    <AlertDescription>
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium">Estado de la receta médica</p>
-                            {getPrescriptionStatusBadge(order.prescriptionStatus)}
-                          </div>
-                          {order.prescriptionStatus === "pending" && (
-                            <p className="text-sm text-muted-foreground">
-                              La farmacia está validando tu receta. Esto puede tomar unos minutos.
-                            </p>
-                          )}
-                          {order.prescriptionStatus === "approved" && (
-                            <p className="text-sm text-muted-foreground">
-                              Tu receta ha sido aprobada por el farmacéutico. El pedido está siendo procesado.
-                            </p>
-                          )}
-                          {order.prescriptionStatus === "rejected" && (
-                            <div className="space-y-1">
-                              <p className="text-sm text-red-700 font-medium">
-                                Tu receta fue rechazada: {order.prescriptionRejectionReason || "Receta no válida"}
-                              </p>
-                              <p className="text-sm text-muted-foreground">
-                                Por favor, carga una nueva receta válida para continuar con tu pedido.
-                              </p>
-                            </div>
-                          )}
-                          <p className="text-xs text-muted-foreground mt-1">Archivo: {order.prescriptionFileName}</p>
-                        </div>
-                        {order.prescriptionStatus === "rejected" && (
-                          <Button size="sm" variant="outline">
-                            Cargar nueva receta
-                          </Button>
-                        )}
-                      </div>
-                    </AlertDescription>
-                  </Alert>
-
-                  {/* Delivery Info */}
-                  <div className="grid md:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <MapPin className="h-4 w-4 text-muted-foreground" />
-                      <div>
-                        <p className="text-sm font-medium">Dirección de entrega</p>
-                        <p className="text-sm text-muted-foreground">{order.deliveryAddress}</p>
-                        {order.deliveryInstructions && (
-                          <p className="text-xs text-muted-foreground italic mt-1">{order.deliveryInstructions}</p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-muted-foreground" />
-                      <div>
-                        <p className="text-sm font-medium">Método de pago</p>
-                        <p className="text-sm text-muted-foreground capitalize">
-                          {order.paymentMethod.replace("-", " ")}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Pharmacy Info */}
-                  <div className="flex items-center gap-3 p-3 bg-background border rounded-lg">
-                    <Package className="h-8 w-8 text-primary" />
-                    <div>
-                      <p className="font-medium">{order.pharmacyName}</p>
-                      <p className="text-sm text-muted-foreground">Farmacia</p>
-                    </div>
-                  </div>
-
-                  {/* Items */}
-                  <div className="space-y-2">
-                    <h4 className="font-medium">Producto</h4>
-                    <div className="flex items-center justify-between p-3 bg-background border rounded">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-muted rounded flex items-center justify-center">
-                          <FileText className="h-5 w-5 text-muted-foreground" />
-                        </div>
-                        <div>
-                          <p className="font-medium">{order.medicationName}</p>
-                          <p className="text-sm text-muted-foreground">Cantidad: {order.quantity}</p>
-                        </div>
-                      </div>
-                      <span className="font-medium">${(order.unitPrice * order.quantity).toLocaleString()}</span>
-                    </div>
-                  </div>
-
-                  {/* Total */}
-                  <div className="border-t pt-4 space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Subtotal</span>
-                      <span>${(order.unitPrice * order.quantity).toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Envío</span>
-                      <span>${order.deliveryFee.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between font-bold text-lg pt-2 border-t">
-                      <span>Total</span>
-                      <span className="text-primary">${order.total.toLocaleString()}</span>
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex gap-2 pt-4 border-t">
-                    <Button variant="outline" size="sm">
-                      <MessageSquare className="h-4 w-4 mr-2" />
-                      Contactar farmacia
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      Ver detalles
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))
+            activeOrders.map(renderOrderCard)
           )}
         </TabsContent>
 
         <TabsContent value="completed" className="space-y-4">
           {completedOrders.length === 0 ? (
             <Card>
-              <CardContent className="text-center py-12">
-                <Package className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No tienes pedidos completados</h3>
-                <p className="text-muted-foreground">Tu historial de pedidos aparecerá aquí</p>
+              <CardContent className="py-12 text-center">
+                <Package className="mx-auto mb-4 h-16 w-16 text-muted-foreground" />
+                <h3 className="mb-2 text-lg font-semibold">No tienes pedidos completados</h3>
+                <p className="text-muted-foreground">Tu historial aparecerá aquí cuando recibas tus pedidos.</p>
               </CardContent>
             </Card>
           ) : (
-            completedOrders.map((order) => (
-              <Card key={order.id}>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <CardTitle className="text-lg">{order.id}</CardTitle>
-                      <p className="text-muted-foreground">
-                        Pedido realizado el {new Date(order.createdAt).toLocaleDateString()} • $
-                        {order.total.toLocaleString()}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {getStatusIcon(order.orderStatus)}
-                      {getStatusBadge(order.orderStatus)}
-                    </div>
-                  </div>
-                </CardHeader>
-
-                <CardContent className="space-y-4">
-                  <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
-                    <FileText className="h-4 w-4 text-muted-foreground" />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">Estado de receta</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        {getPrescriptionStatusBadge(order.prescriptionStatus)}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Pharmacy Info */}
-                  <div className="flex items-center gap-3 p-3 bg-background border rounded-lg">
-                    <Package className="h-8 w-8 text-primary" />
-                    <div>
-                      <p className="font-medium">{order.pharmacyName}</p>
-                      <p className="text-sm text-muted-foreground">Farmacia</p>
-                    </div>
-                  </div>
-
-                  {/* Items */}
-                  <div className="space-y-2">
-                    <h4 className="font-medium">Producto</h4>
-                    <div className="flex items-center justify-between p-2 bg-muted/50 rounded">
-                      <div>
-                        <p className="font-medium text-sm">{order.medicationName}</p>
-                        <p className="text-xs text-muted-foreground">Cantidad: {order.quantity}</p>
-                      </div>
-                      <span className="font-medium text-sm">
-                        ${(order.unitPrice * order.quantity).toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Delivery Status */}
-                  {order.orderStatus === "delivered" && order.actualDelivery && (
-                    <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
-                      <CheckCircle className="h-5 w-5 text-green-600" />
-                      <div>
-                        <p className="font-medium text-green-800">Pedido entregado exitosamente</p>
-                        <p className="text-sm text-muted-foreground">
-                          Entregado el {new Date(order.actualDelivery).toLocaleDateString()} a las{" "}
-                          {new Date(order.actualDelivery).toLocaleTimeString()}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Actions */}
-                  <div className="flex gap-2 pt-4 border-t">
-                    <Button variant="outline" size="sm">
-                      Volver a pedir
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      Ver factura
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))
+            completedOrders.map(renderOrderCard)
           )}
         </TabsContent>
       </Tabs>

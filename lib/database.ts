@@ -51,21 +51,30 @@ db.exec(`
     orderNumber TEXT UNIQUE NOT NULL,
     date TEXT NOT NULL,
     status TEXT NOT NULL,
+    customerId TEXT NOT NULL,
     pharmacyId TEXT NOT NULL,
     pharmacyName TEXT NOT NULL,
+    courierId TEXT,
     subtotal REAL NOT NULL,
     deliveryFee REAL NOT NULL,
     insuranceDiscount REAL NOT NULL,
     total REAL NOT NULL,
     deliveryAddress TEXT NOT NULL,
+    deliveryInstructions TEXT,
     prescriptionRequired BOOLEAN NOT NULL,
     prescriptionUploaded BOOLEAN NOT NULL,
     prescriptionStatus TEXT NOT NULL,
     prescriptionRejectionReason TEXT,
+    prescriptionFileName TEXT,
     estimatedDelivery TEXT NOT NULL,
     actualDelivery TEXT,
     paymentMethod TEXT NOT NULL,
-    insuranceUsed TEXT NOT NULL
+    insuranceUsed TEXT NOT NULL,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    FOREIGN KEY (customerId) REFERENCES users(id),
+    FOREIGN KEY (pharmacyId) REFERENCES users(id),
+    FOREIGN KEY (courierId) REFERENCES users(id)
   );
 
   -- Order items table
@@ -236,6 +245,49 @@ try {
   // Column might already exist
 }
 
+try {
+  db.exec(`ALTER TABLE orders ADD COLUMN customerId TEXT;`);
+} catch (error) {
+  // Column might already exist
+}
+
+try {
+  db.exec(`ALTER TABLE orders ADD COLUMN courierId TEXT;`);
+} catch (error) {
+  // Column might already exist
+}
+
+try {
+  db.exec(`ALTER TABLE orders ADD COLUMN deliveryInstructions TEXT;`);
+} catch (error) {
+  // Column might already exist
+}
+
+try {
+  db.exec(`ALTER TABLE orders ADD COLUMN prescriptionFileName TEXT;`);
+} catch (error) {
+  // Column might already exist
+}
+
+try {
+  db.exec(`ALTER TABLE orders ADD COLUMN createdAt TEXT NOT NULL DEFAULT '';`);
+} catch (error) {
+  // Column might already exist
+}
+
+try {
+  db.exec(`ALTER TABLE orders ADD COLUMN updatedAt TEXT NOT NULL DEFAULT '';`);
+} catch (error) {
+  // Column might already exist
+}
+
+try {
+  db.exec(`UPDATE orders SET createdAt = COALESCE(NULLIF(createdAt, ''), date);`);
+  db.exec(`UPDATE orders SET updatedAt = COALESCE(NULLIF(updatedAt, ''), date);`);
+} catch (error) {
+  // Table might not exist yet or columns were just added
+}
+
 // Prepared statements for users
 export const userStatements = {
   insert: db.prepare(`
@@ -269,11 +321,60 @@ export const prescriptionStatements = {
 // Prepared statements for orders
 export const orderStatements = {
   insert: db.prepare(`
-    INSERT INTO orders (id, orderNumber, date, status, pharmacyId, pharmacyName, subtotal, deliveryFee, insuranceDiscount, total, deliveryAddress, prescriptionRequired, prescriptionUploaded, prescriptionStatus, prescriptionRejectionReason, estimatedDelivery, actualDelivery, paymentMethod, insuranceUsed)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO orders (
+      id,
+      orderNumber,
+      date,
+      status,
+      customerId,
+      pharmacyId,
+      pharmacyName,
+      courierId,
+      subtotal,
+      deliveryFee,
+      insuranceDiscount,
+      total,
+      deliveryAddress,
+      deliveryInstructions,
+      prescriptionRequired,
+      prescriptionUploaded,
+      prescriptionStatus,
+      prescriptionRejectionReason,
+      prescriptionFileName,
+      estimatedDelivery,
+      actualDelivery,
+      paymentMethod,
+      insuranceUsed,
+      createdAt,
+      updatedAt
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `),
   getAll: db.prepare('SELECT * FROM orders'),
-  updateStatus: db.prepare('UPDATE orders SET status = ?, actualDelivery = ? WHERE id = ?'),
+  getById: db.prepare('SELECT * FROM orders WHERE id = ?'),
+  getByCustomerId: db.prepare('SELECT * FROM orders WHERE customerId = ? ORDER BY date DESC'),
+  getByPharmacyId: db.prepare('SELECT * FROM orders WHERE pharmacyId = ? ORDER BY date DESC'),
+  getByCourierId: db.prepare('SELECT * FROM orders WHERE courierId = ? ORDER BY date DESC'),
+  getAvailableForCouriers: db.prepare(`
+    SELECT * FROM orders
+    WHERE status = 'accepted' AND (courierId IS NULL OR courierId = '')
+    ORDER BY date ASC
+  `),
+  updateLifecycle: db.prepare(`
+    UPDATE orders
+    SET
+      status = ?,
+      courierId = ?,
+      estimatedDelivery = COALESCE(?, estimatedDelivery),
+      actualDelivery = COALESCE(?, actualDelivery),
+      updatedAt = ?
+    WHERE id = ?
+  `),
+  updatePrescription: db.prepare(`
+    UPDATE orders
+    SET prescriptionStatus = ?, prescriptionRejectionReason = ?, updatedAt = ?
+    WHERE id = ?
+  `),
   delete: db.prepare('DELETE FROM orders WHERE id = ?'),
 };
 

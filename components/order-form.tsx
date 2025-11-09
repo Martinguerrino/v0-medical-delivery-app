@@ -13,6 +13,7 @@ import { Upload, FileText, CheckCircle2, AlertCircle, X } from "lucide-react"
 import { calculateFinalPrice } from "@/lib/utils/price-calculator"
 import { insuranceOptions } from "@/lib/data/insurance"
 import type { ClientMedication, ClientMedicationPrice } from "@/lib/types/client-medication"
+import { useToast } from "@/hooks/use-toast"
 
 interface OrderFormProps {
   medication: ClientMedication
@@ -34,6 +35,8 @@ export function OrderForm({ medication, pharmacyPrice, pharmacyName, deliveryFee
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [uploadSuccess, setUploadSuccess] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const { toast } = useToast()
 
   const user = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("user") || "{}") : {}
   const userInsurance = user.obraSocial || ""
@@ -44,7 +47,9 @@ export function OrderForm({ medication, pharmacyPrice, pharmacyName, deliveryFee
 
   const effectiveDeliveryFee = Number.isFinite(deliveryFee) ? deliveryFee : pharmacyPrice.deliveryFee ?? 0
   const priceCalculation = calculateFinalPrice(pharmacyPrice, userInsuranceData?.id || "")
-  const finalUnitPrice = priceCalculation.finalPrice
+  const baseUnitPrice = pharmacyPrice.discountedPrice ?? pharmacyPrice.price
+  const finalUnitPrice = Number.isFinite(priceCalculation.finalPrice) ? priceCalculation.finalPrice : baseUnitPrice
+  const unitSavings = Math.max(0, baseUnitPrice - finalUnitPrice)
   const subtotal = finalUnitPrice * formData.quantity
   const total = subtotal + effectiveDeliveryFee
 
@@ -100,38 +105,78 @@ export function OrderForm({ medication, pharmacyPrice, pharmacyName, deliveryFee
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
+    setSubmitError(null)
+
     if (!validateForm()) return
+
+    if (!user?.id) {
+      setSubmitError("Debes iniciar sesión como cliente para realizar un pedido")
+      toast({ title: "Sesión requerida", description: "Inicia sesión para completar el pedido." })
+      return
+    }
+
+    if (user.role && user.role !== "Cliente") {
+      setSubmitError("Solo los clientes pueden realizar pedidos")
+      toast({ title: "Permiso denegado", description: "Tu rol no permite crear pedidos." })
+      return
+    }
 
     setIsSubmitting(true)
 
-    setTimeout(() => {
-      // Guardar pedido en localStorage
-      const orders = JSON.parse(localStorage.getItem("orders") || "[]")
-      const newOrder = {
-        id: `ORD-${Date.now()}`,
-        userId: user.email,
-        medicationId: medication.id,
-        medicationName: medication.name,
-        pharmacyId: pharmacyPrice.pharmacyId,
-        pharmacyName,
-        quantity: formData.quantity,
-        unitPrice: finalUnitPrice,
-        deliveryFee: effectiveDeliveryFee,
-        total: total,
-        deliveryAddress: formData.deliveryAddress,
-        deliveryInstructions: formData.deliveryInstructions,
-        paymentMethod: formData.paymentMethod,
-        prescriptionFileName: formData.prescriptionFile?.name,
-        prescriptionStatus: "pending",
-        orderStatus: "pending",
-        createdAt: new Date().toISOString(),
-      }
-      orders.push(newOrder)
-      localStorage.setItem("orders", JSON.stringify(orders))
+    try {
+      const lineFinalPrice = finalUnitPrice * formData.quantity
+      const lineInsuranceSavings = unitSavings * formData.quantity
 
-      setIsSubmitting(false)
+      const response = await fetch("/api/orders", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          customerId: user.id,
+          pharmacyId: pharmacyPrice.pharmacyId,
+          pharmacyName,
+          deliveryAddress: formData.deliveryAddress,
+          deliveryInstructions: formData.deliveryInstructions || null,
+          paymentMethod: formData.paymentMethod,
+          insuranceUsed: userInsuranceData?.id || userInsuranceData?.name || "",
+          prescriptionRequired: medication.requiresPrescription,
+          prescriptionUploaded: Boolean(formData.prescriptionFile),
+          prescriptionStatus: "pending",
+          prescriptionFileName: formData.prescriptionFile?.name || null,
+          items: [
+            {
+              medicationId: medication.id,
+              medicationName: medication.name,
+              brand: medication.brand,
+              quantity: formData.quantity,
+              unitPrice: baseUnitPrice,
+              finalPrice: lineFinalPrice,
+              insuranceSavings: lineInsuranceSavings,
+            },
+          ],
+          deliveryFee: effectiveDeliveryFee,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = (await response.json().catch(() => null)) as { error?: string } | null
+        const message = errorData?.error || "No se pudo crear el pedido"
+        setSubmitError(message)
+        toast({ title: "Error al crear el pedido", description: message })
+        return
+      }
+
+      toast({ title: "Pedido creado", description: "Tu pedido fue registrado correctamente." })
       onSuccess()
-    }, 1500)
+    } catch (error) {
+      console.error("Error creating order", error)
+      const message = "Ocurrió un problema al registrar el pedido"
+      setSubmitError(message)
+      toast({ title: "Error inesperado", description: message })
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   if (!pharmacyPrice) {
@@ -292,6 +337,7 @@ export function OrderForm({ medication, pharmacyPrice, pharmacyName, deliveryFee
           <span>Total</span>
           <span className="text-primary">${total.toLocaleString()}</span>
         </div>
+        {submitError && <p className="text-sm text-destructive">{submitError}</p>}
       </div>
 
       {/* Botones */}
