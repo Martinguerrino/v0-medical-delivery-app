@@ -6,8 +6,6 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Building2, Clock, Star, Truck, Package, ShoppingCart, Check } from "lucide-react"
 import { pharmacies as fallbackPharmacies } from "@/lib/data/pharmacies"
-import { insuranceOptions } from "@/lib/data/insurance"
-import { calculateFinalPrice, type PriceCalculation } from "@/lib/utils/price-calculator"
 import type { ClientMedication, ClientMedicationPrice } from "@/lib/types/client-medication"
 import { OrderForm } from "./order-form"
 
@@ -23,8 +21,8 @@ interface AvailablePharmacyEntry {
   deliveryFee: number
   isOpen: boolean
   originalPrice: number
+  displayedPrice: number
   hasDiscount: boolean
-  priceCalculation: PriceCalculation
   priceData: ClientMedicationPrice
 }
 
@@ -39,18 +37,13 @@ export function MedicationCardWithPharmacies({ medication }: MedicationCardWithP
   const [selectedPharmacy, setSelectedPharmacy] = useState<AvailablePharmacyEntry | null>(null)
   const [showOrderForm, setShowOrderForm] = useState(false)
 
-  const user = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("user") || "{}") : {}
-  const userInsurance = user.obraSocial || ""
-  const userInsuranceData = insuranceOptions.find((ins) => ins.name.toLowerCase() === userInsurance.toLowerCase())
-
   const availablePharmacies: AvailablePharmacyEntry[] = medication.prices
     .filter((price) => price.inStock)
     .map((price) => {
       const fallback =
         fallbackPharmacyMap.get(price.pharmacyId) ||
         (price.pharmacySlug ? fallbackPharmacyMap.get(price.pharmacySlug) : undefined)
-
-      const priceCalculation = calculateFinalPrice(price, userInsuranceData?.id || "")
+      const displayedPrice = price.discountedPrice ?? price.price
 
       return {
         id: price.pharmacyId,
@@ -60,12 +53,12 @@ export function MedicationCardWithPharmacies({ medication }: MedicationCardWithP
         deliveryFee: price.deliveryFee ?? fallback?.deliveryFee ?? 0,
         isOpen: price.isOpen ?? fallback?.isOpen ?? false,
         originalPrice: price.price,
+        displayedPrice,
         hasDiscount: typeof price.discountedPrice === "number" && price.discountedPrice !== price.price,
-        priceCalculation,
         priceData: price,
       }
     })
-    .sort((a, b) => a.priceCalculation.finalPrice - b.priceCalculation.finalPrice)
+    .sort((a, b) => a.displayedPrice - b.displayedPrice)
 
   const handlePharmacyClick = (entry: AvailablePharmacyEntry) => {
     setSelectedPharmacy(entry)
@@ -152,15 +145,20 @@ export function MedicationCardWithPharmacies({ medication }: MedicationCardWithP
                       </div>
                     </div>
                     <div className="text-right">
-                      {pharmacy.hasDiscount && (
-                        <p className="text-xs text-muted-foreground line-through">
-                          ${pharmacy.originalPrice.toLocaleString()}
+                      {pharmacy.hasDiscount ? (
+                        <>
+                          <p className="text-xs text-muted-foreground line-through">
+                            ${pharmacy.originalPrice.toLocaleString()}
+                          </p>
+                          <p className="text-lg font-bold text-primary">
+                            ${pharmacy.displayedPrice.toLocaleString()}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-lg font-bold text-primary">
+                          ${pharmacy.displayedPrice.toLocaleString()}
                         </p>
                       )}
-                      <p className="text-lg font-bold text-primary">
-                        ${pharmacy.priceCalculation.finalPrice.toLocaleString()}
-                      </p>
-                      {userInsurance && <p className="text-xs text-muted-foreground">con {userInsurance}</p>}
                     </div>
                   </div>
                   <div className="flex items-center justify-center gap-2 mt-2 text-sm text-primary font-medium">

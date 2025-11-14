@@ -10,8 +10,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Upload, FileText, CheckCircle2, AlertCircle, X } from "lucide-react"
-import { calculateFinalPrice } from "@/lib/utils/price-calculator"
-import { insuranceOptions } from "@/lib/data/insurance"
 import type { ClientMedication, ClientMedicationPrice } from "@/lib/types/client-medication"
 import { useToast } from "@/hooks/use-toast"
 
@@ -40,16 +38,10 @@ export function OrderForm({ medication, pharmacyPrice, pharmacyName, deliveryFee
 
   const user = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("user") || "{}") : {}
   const userInsurance = user.obraSocial || ""
-  const normalizedInsurance = userInsurance.trim().toLowerCase()
-  const userInsuranceData =
-    insuranceOptions.find((ins) => ins.id.toLowerCase() === normalizedInsurance) ||
-    insuranceOptions.find((ins) => ins.name.toLowerCase() === normalizedInsurance)
 
   const effectiveDeliveryFee = Number.isFinite(deliveryFee) ? deliveryFee : pharmacyPrice.deliveryFee ?? 0
-  const priceCalculation = calculateFinalPrice(pharmacyPrice, userInsuranceData?.id || "")
   const baseUnitPrice = pharmacyPrice.discountedPrice ?? pharmacyPrice.price
-  const finalUnitPrice = Number.isFinite(priceCalculation.finalPrice) ? priceCalculation.finalPrice : baseUnitPrice
-  const unitSavings = Math.max(0, baseUnitPrice - finalUnitPrice)
+  const finalUnitPrice = baseUnitPrice
   const subtotal = finalUnitPrice * formData.quantity
   const total = subtotal + effectiveDeliveryFee
 
@@ -90,7 +82,7 @@ export function OrderForm({ medication, pharmacyPrice, pharmacyName, deliveryFee
       newErrors.paymentMethod = "Debe seleccionar un método de pago"
     }
 
-    if (!formData.prescriptionFile) {
+    if (medication.requiresPrescription && !formData.prescriptionFile) {
       newErrors.prescriptionFile = "Debe cargar la receta médica"
     }
 
@@ -124,9 +116,6 @@ export function OrderForm({ medication, pharmacyPrice, pharmacyName, deliveryFee
     setIsSubmitting(true)
 
     try {
-      const lineFinalPrice = finalUnitPrice * formData.quantity
-      const lineInsuranceSavings = unitSavings * formData.quantity
-
       const payload = {
         customerId: user.id,
         pharmacyId: pharmacyPrice.pharmacyId,
@@ -134,7 +123,7 @@ export function OrderForm({ medication, pharmacyPrice, pharmacyName, deliveryFee
         deliveryAddress: formData.deliveryAddress,
         deliveryInstructions: formData.deliveryInstructions || null,
         paymentMethod: formData.paymentMethod,
-        insuranceUsed: userInsuranceData?.id || userInsuranceData?.name || "",
+        insuranceUsed: userInsurance || "",
         prescriptionRequired: medication.requiresPrescription,
         prescriptionUploaded: Boolean(formData.prescriptionFile),
         prescriptionStatus: "pending" as const,
@@ -146,8 +135,8 @@ export function OrderForm({ medication, pharmacyPrice, pharmacyName, deliveryFee
             brand: medication.brand,
             quantity: formData.quantity,
             unitPrice: baseUnitPrice,
-            finalPrice: lineFinalPrice,
-            insuranceSavings: lineInsuranceSavings,
+            finalPrice: subtotal,
+            insuranceSavings: 0,
           },
         ],
         deliveryFee: effectiveDeliveryFee,
@@ -253,56 +242,58 @@ export function OrderForm({ medication, pharmacyPrice, pharmacyName, deliveryFee
       </div>
 
       {/* Carga de receta médica */}
-      <div className="space-y-2">
-        <Label htmlFor="prescription">
-          Receta médica <span className="text-destructive">*</span>
-        </Label>
-        <div className="border-2 border-dashed rounded-lg p-6 text-center">
-          {!formData.prescriptionFile ? (
-            <>
-              <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground mb-2">Arrastra tu receta aquí o haz clic para seleccionar</p>
-              <p className="text-xs text-muted-foreground mb-4">Formatos: JPG, PNG, PDF (máx. 10MB)</p>
-              <Input
-                id="prescription"
-                type="file"
-                accept=".jpg,.jpeg,.png,.pdf"
-                onChange={handleFileChange}
-                className="hidden"
-              />
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => document.getElementById("prescription")?.click()}
-              >
-                Seleccionar archivo
-              </Button>
-            </>
-          ) : (
-            <div className="flex items-center justify-between bg-muted rounded-lg p-4">
-              <div className="flex items-center gap-3">
-                <FileText className="h-8 w-8 text-primary" />
-                <div className="text-left">
-                  <p className="font-medium text-sm">{formData.prescriptionFile.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {(formData.prescriptionFile.size / 1024 / 1024).toFixed(2)} MB
-                  </p>
+      {medication.requiresPrescription && (
+        <div className="space-y-2">
+          <Label htmlFor="prescription">
+            Receta médica <span className="text-destructive">*</span>
+          </Label>
+          <div className="border-2 border-dashed rounded-lg p-6 text-center">
+            {!formData.prescriptionFile ? (
+              <>
+                <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground mb-2">Arrastra tu receta aquí o haz clic para seleccionar</p>
+                <p className="text-xs text-muted-foreground mb-4">Formatos: JPG, PNG, PDF (máx. 10MB)</p>
+                <Input
+                  id="prescription"
+                  type="file"
+                  accept=".jpg,.jpeg,.png,.pdf"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => document.getElementById("prescription")?.click()}
+                >
+                  Seleccionar archivo
+                </Button>
+              </>
+            ) : (
+              <div className="flex items-center justify-between bg-muted rounded-lg p-4">
+                <div className="flex items-center gap-3">
+                  <FileText className="h-8 w-8 text-primary" />
+                  <div className="text-left">
+                    <p className="font-medium text-sm">{formData.prescriptionFile.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {(formData.prescriptionFile.size / 1024 / 1024).toFixed(2)} MB
+                    </p>
+                  </div>
                 </div>
+                <Button type="button" variant="ghost" size="sm" onClick={removeFile}>
+                  <X className="h-4 w-4" />
+                </Button>
               </div>
-              <Button type="button" variant="ghost" size="sm" onClick={removeFile}>
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
+            )}
+          </div>
+          {uploadSuccess && (
+            <Alert className="bg-green-50 border-green-200">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <AlertDescription className="text-green-800">Receta cargada correctamente</AlertDescription>
+            </Alert>
           )}
+          {errors.prescriptionFile && <p className="text-sm text-destructive">{errors.prescriptionFile}</p>}
         </div>
-        {uploadSuccess && (
-          <Alert className="bg-green-50 border-green-200">
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-green-800">Receta cargada correctamente</AlertDescription>
-          </Alert>
-        )}
-        {errors.prescriptionFile && <p className="text-sm text-destructive">{errors.prescriptionFile}</p>}
-      </div>
+      )}
 
       {/* Método de pago */}
       <div className="space-y-2">
