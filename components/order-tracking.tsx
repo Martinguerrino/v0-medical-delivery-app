@@ -321,15 +321,7 @@ export function OrderTracking() {
           )}
         </div>
 
-        <div className="flex gap-2 border-t pt-4">
-          <Button variant="outline" size="sm">
-            <MessageSquare className="mr-2 h-4 w-4" />
-            Contactar farmacia
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => router.push(`/pedidos/${order.id}`)}>
-            Ver detalles
-          </Button>
-        </div>
+        <div className="border-t pt-4" />
       </CardContent>
     </Card>
   )
