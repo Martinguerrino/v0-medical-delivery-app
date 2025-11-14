@@ -8,7 +8,6 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Eye, EyeOff, Mail, Lock, Info } from "lucide-react"
-import { authenticateUser } from "@/lib/data/users-db"
 
 interface LoginFormProps {
   onToggleMode: () => void
@@ -27,11 +26,23 @@ export function LoginForm({ onToggleMode, onLogin }: LoginFormProps) {
     setIsLoading(true)
     setError("")
 
-    setTimeout(() => {
-      const result = authenticateUser(email, password)
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      })
 
-      if (result.success && result.user) {
-        // Store user data in localStorage
+      const result = (await response.json()) as { success: boolean; message: string; user?: any }
+
+      if (!response.ok || !result.success) {
+        setError(result?.message || "No se pudo iniciar sesión")
+        return
+      }
+
+      if (result.user) {
         localStorage.setItem(
           "user",
           JSON.stringify({
@@ -41,10 +52,14 @@ export function LoginForm({ onToggleMode, onLogin }: LoginFormProps) {
         )
         onLogin(result.user)
       } else {
-        setError(result.message)
+        setError("Respuesta inválida del servidor")
       }
+    } catch (error) {
+      console.error("Error logging in:", error)
+      setError("Error al conectar con el servidor. Inténtalo nuevamente.")
+    } finally {
       setIsLoading(false)
-    }, 1000)
+    }
   }
 
   const handleDemoLogin = (role: "Cliente" | "Farmacia" | "Repartidor") => {

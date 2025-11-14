@@ -84,15 +84,9 @@ export function MedicationCardWithPharmacies({ medication }: MedicationCardWithP
 
         <CardContent className="pt-6">
           <div className="mb-4 pb-4 border-b">
-            <p className="text-sm text-muted-foreground mb-2">{medication.description}</p>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div>
-                <span className="font-medium">Presentación:</span> {medication.presentation}
-              </div>
-              <div>
-                <span className="font-medium">Laboratorio:</span> {medication.laboratory}
-              </div>
-            </div>
+            <p className="text-sm text-muted-foreground">
+              {medication.description || ""}
+            </p>
           </div>
 
           <div className="space-y-3">
