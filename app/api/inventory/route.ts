@@ -3,10 +3,27 @@ import { inventoryStatements, medicationStatements, pharmacyStatements, userStat
 
 export async function POST(request: NextRequest) {
   try {
-    const { pharmacyId, name, genericName, brand, category, price, stock, dosage, presentation, laboratory, description } = await request.json()
+    const {
+      pharmacyId,
+      name,
+      genericName,
+      brand,
+      category,
+      price,
+      stock,
+      dosage,
+      presentation,
+      laboratory,
+      description,
+      requiresPrescription,
+    } = await request.json()
     
     if (!pharmacyId || !name) {
       return NextResponse.json({ error: 'Faltan datos obligatorios (pharmacyId, name).' }, { status: 400 })
+    }
+
+    if (requiresPrescription === undefined || requiresPrescription === null || requiresPrescription === '') {
+      return NextResponse.json({ error: 'Debe indicar si el medicamento requiere receta médica.' }, { status: 400 })
     }
     
   const pharmacyUser: any = userStatements.getById.get(pharmacyId)
@@ -68,13 +85,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Insert medication
+    const requiresPrescriptionFlag =
+      requiresPrescription === true ||
+      requiresPrescription === 1 ||
+      requiresPrescription === 'si' ||
+      requiresPrescription === 'true'
+
     const insertResult = medicationStatements.insert.run(
       null,
       name,
       genericName || '',
       brand || '',
       category || 'Otros',
-      0, // requiresPrescription
+      requiresPrescriptionFlag ? 1 : 0,
       description || '',
       dosage || '',
       presentation || '',
@@ -103,7 +126,21 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const { id, pharmacyId, name, genericName, brand, category, requiresPrescription, price, stock, dosage, presentation, laboratory, description } = await request.json()
+    const {
+      id,
+      pharmacyId,
+      name,
+      genericName,
+      brand,
+      category,
+      requiresPrescription,
+      price,
+      stock,
+      dosage,
+      presentation,
+      laboratory,
+      description,
+    } = await request.json()
 
     if (!id || !pharmacyId) {
       return NextResponse.json({ error: 'Faltan datos obligatorios (id, pharmacyId).' }, { status: 400 })
@@ -113,13 +150,23 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Debe especificar precio y stock.' }, { status: 400 })
     }
 
+    if (requiresPrescription === undefined || requiresPrescription === null || requiresPrescription === '') {
+      return NextResponse.json({ error: 'Debe indicar si el medicamento requiere receta médica.' }, { status: 400 })
+    }
+
+    const requiresPrescriptionFlag =
+      requiresPrescription === true ||
+      requiresPrescription === 1 ||
+      requiresPrescription === 'si' ||
+      requiresPrescription === 'true'
+
     // Update medication
     medicationStatements.update.run(
       name,
       genericName || '',
       brand || '',
       category || 'Otros',
-      requiresPrescription ? 1 : 0,
+      requiresPrescriptionFlag ? 1 : 0,
       description || '',
       dosage || '',
       presentation || '',
