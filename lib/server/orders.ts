@@ -38,6 +38,9 @@ export const mapOrderItemRow = (row: any): OrderItemRecord => ({
 
 export const mapOrderRow = (row: any): OrderWithItems => {
   const items = orderItemStatements.getByOrderId.all(row.id).map(mapOrderItemRow)
+  const rawFilePath = toNullableString(row.prescriptionFilePath)
+  const normalizedFilePath = rawFilePath ? rawFilePath.replace(/\\/g, "/").replace(/^\/+/, "") : null
+  const fileUrl = normalizedFilePath ? `/${normalizedFilePath}` : null
 
   return {
     id: row.id,
@@ -59,6 +62,8 @@ export const mapOrderRow = (row: any): OrderWithItems => {
     prescriptionStatus: (row.prescriptionStatus ?? "pending") as PrescriptionStatus,
     prescriptionRejectionReason: toNullableString(row.prescriptionRejectionReason),
     prescriptionFileName: toNullableString(row.prescriptionFileName),
+    prescriptionFilePath: normalizedFilePath,
+    prescriptionFileUrl: fileUrl,
     estimatedDelivery: toNullableString(row.estimatedDelivery),
     actualDelivery: toNullableString(row.actualDelivery),
     paymentMethod: row.paymentMethod,

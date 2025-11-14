@@ -1,4 +1,6 @@
 import { randomUUID } from "crypto"
+import { promises as fs } from "fs"
+import path from "path"
 import { NextRequest, NextResponse } from "next/server"
 import { orderStatements, orderItemStatements, userStatements } from "@/lib/database"
 import type { OrderStatus, OrderWithItems, PrescriptionStatus } from "@/lib/types/orders"
@@ -36,6 +38,45 @@ interface CreateOrderPayload {
 const STATUS_PARAM_KEY = "status"
 
 const ORDER_STATUS_SET = new Set<OrderStatus>(ORDER_STATUS_SEQUENCE)
+
+const PRESCRIPTION_STORAGE_DIR = path.join(process.cwd(), "public", "recetas")
+const MAX_PRESCRIPTION_FILE_SIZE = 10 * 1024 * 1024
+const ALLOWED_PRESCRIPTION_MIME_TYPES = new Set(["image/jpeg", "image/png", "application/pdf"])
+
+const sanitizeFileBase = (input: string): string => {
+  const normalized = input.normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+  const asciiOnly = normalized.replace(/[^\x00-\x7F]/g, "")
+  const slug = asciiOnly.replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "")
+  return slug.toLowerCase().slice(0, 50)
+}
+
+const buildStoredFileName = (orderId: string, originalName: string): string => {
+  const parsed = path.parse(originalName)
+  const baseName = sanitizeFileBase(parsed.name) || "receta"
+  const extension = parsed.ext.toLowerCase()
+  const timestamp = Date.now()
+  return `${orderId}-${timestamp}-${baseName}${extension}`
+}
+
+interface SavedPrescriptionFile {
+  originalName: string
+  relativePath: string
+  absolutePath: string
+}
+
+const persistPrescriptionFile = async (orderId: string, file: File): Promise<SavedPrescriptionFile> => {
+  await fs.mkdir(PRESCRIPTION_STORAGE_DIR, { recursive: true })
+  const storedName = buildStoredFileName(orderId, file.name)
+  const absolutePath = path.join(PRESCRIPTION_STORAGE_DIR, storedName)
+  const arrayBuffer = await file.arrayBuffer()
+  await fs.writeFile(absolutePath, Buffer.from(arrayBuffer))
+  const relativePath = path.join("recetas", storedName).replace(/\\/g, "/")
+  return {
+    originalName: file.name,
+    relativePath,
+    absolutePath,
+  }
+}
 
 const getOrdersByFilters = (params: URLSearchParams): OrderWithItems[] => {
   const customerId = params.get("customerId")
@@ -86,8 +127,20 @@ const buildOrderNumber = () => {
 }
 
 export async function POST(request: NextRequest) {
+  let savedFileAbsolutePath: string | null = null
   try {
-    const body = (await request.json()) as Partial<CreateOrderPayload>
+    const formData = await request.formData()
+    const payloadRaw = formData.get("payload")
+    if (typeof payloadRaw !== "string") {
+      return NextResponse.json({ error: "Datos del pedido inválidos" }, { status: 400 })
+    }
+
+    let body: Partial<CreateOrderPayload>
+    try {
+      body = JSON.parse(payloadRaw) as Partial<CreateOrderPayload>
+    } catch {
+      return NextResponse.json({ error: "Formato de datos inválido" }, { status: 400 })
+    }
 
     if (!body?.customerId || !body.pharmacyId || !body.pharmacyName) {
       return NextResponse.json({ error: "Datos obligatorios incompletos" }, { status: 400 })
@@ -101,14 +154,31 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Faltan datos de entrega o pago" }, { status: 400 })
     }
 
-  const customer = userStatements.getById.get(body.customerId) as any
+    const customer = userStatements.getById.get(body.customerId) as any
     if (!customer) {
       return NextResponse.json({ error: "El cliente no existe" }, { status: 400 })
     }
 
-  const pharmacy = userStatements.getById.get(body.pharmacyId) as any
+    const pharmacy = userStatements.getById.get(body.pharmacyId) as any
     if (!pharmacy || pharmacy.role !== "Farmacia") {
       return NextResponse.json({ error: "La farmacia no es válida" }, { status: 400 })
+    }
+
+    const fileEntry = formData.get("prescriptionFile")
+    const prescriptionFile = fileEntry instanceof File ? fileEntry : null
+
+    const prescriptionRequired = Boolean(body.prescriptionRequired)
+    if (prescriptionRequired && !prescriptionFile) {
+      return NextResponse.json({ error: "La receta médica es obligatoria" }, { status: 400 })
+    }
+
+    if (prescriptionFile) {
+      if (!ALLOWED_PRESCRIPTION_MIME_TYPES.has(prescriptionFile.type)) {
+        return NextResponse.json({ error: "Formato de archivo no permitido" }, { status: 400 })
+      }
+      if (prescriptionFile.size > MAX_PRESCRIPTION_FILE_SIZE) {
+        return NextResponse.json({ error: "El archivo supera el tamaño máximo permitido" }, { status: 400 })
+      }
     }
 
     const now = new Date().toISOString()
@@ -139,9 +209,19 @@ export async function POST(request: NextRequest) {
     const total = subtotal + deliveryFee
 
     const estimatedDelivery = body.estimatedDelivery ?? new Date(Date.now() + 45 * 60 * 1000).toISOString()
-    const prescriptionRequired = Boolean(body.prescriptionRequired)
-    const prescriptionUploaded = Boolean(body.prescriptionUploaded)
     const prescriptionStatus: PrescriptionStatus = body.prescriptionStatus ?? "pending"
+
+    let originalFileName = body.prescriptionFileName ?? null
+    let relativeFilePath: string | null = null
+
+    if (prescriptionFile) {
+      const persisted = await persistPrescriptionFile(orderId, prescriptionFile)
+      savedFileAbsolutePath = persisted.absolutePath
+      originalFileName = persisted.originalName
+      relativeFilePath = persisted.relativePath
+    }
+
+    const prescriptionUploaded = Boolean(prescriptionFile ?? body.prescriptionUploaded)
 
     orderStatements.insert.run(
       orderId,
@@ -162,7 +242,8 @@ export async function POST(request: NextRequest) {
       prescriptionUploaded ? 1 : 0,
       prescriptionStatus,
       body.prescriptionRejectionReason ?? null,
-      body.prescriptionFileName ?? null,
+      originalFileName,
+      relativeFilePath,
       estimatedDelivery,
       null,
       body.paymentMethod,
@@ -190,6 +271,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(createdOrder, { status: 201 })
   } catch (error) {
+    if (savedFileAbsolutePath) {
+      await fs.unlink(savedFileAbsolutePath).catch(() => undefined)
+    }
     console.error("Error creating order:", error)
     return NextResponse.json({ error: "Error al crear el pedido" }, { status: 500 })
   }

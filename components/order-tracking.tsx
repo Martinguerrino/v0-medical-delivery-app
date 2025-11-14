@@ -239,9 +239,21 @@ export function OrderTracking() {
                       </p>
                     </div>
                   )}
-                  <p className="text-xs text-muted-foreground">
-                    Archivo: {order.prescriptionFileName || "Pendiente de carga"}
-                  </p>
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span>Archivo:</span>
+                    {order.prescriptionFileUrl ? (
+                      <a
+                        href={order.prescriptionFileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary underline underline-offset-2"
+                      >
+                        {order.prescriptionFileName || "Descargar receta"}
+                      </a>
+                    ) : (
+                      <span>{order.prescriptionFileName || "Pendiente de carga"}</span>
+                    )}
+                  </div>
                 </div>
                 {order.prescriptionStatus === "rejected" && (
                   <Button size="sm" variant="outline" onClick={() => router.push("/historial")}>

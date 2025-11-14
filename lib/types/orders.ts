@@ -35,6 +35,8 @@ export interface OrderRecord {
   prescriptionStatus: PrescriptionStatus
   prescriptionRejectionReason?: string | null
   prescriptionFileName?: string | null
+  prescriptionFilePath?: string | null
+  prescriptionFileUrl?: string | null
   estimatedDelivery?: string | null
   actualDelivery?: string | null
   paymentMethod: string

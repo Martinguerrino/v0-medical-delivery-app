@@ -66,6 +66,7 @@ db.exec(`
     prescriptionStatus TEXT NOT NULL,
     prescriptionRejectionReason TEXT,
     prescriptionFileName TEXT,
+  prescriptionFilePath TEXT,
     estimatedDelivery TEXT NOT NULL,
     actualDelivery TEXT,
     paymentMethod TEXT NOT NULL,
@@ -270,6 +271,12 @@ try {
 }
 
 try {
+  db.exec(`ALTER TABLE orders ADD COLUMN prescriptionFilePath TEXT;`);
+} catch (error) {
+  // Column might already exist
+}
+
+try {
   db.exec(`ALTER TABLE orders ADD COLUMN createdAt TEXT NOT NULL DEFAULT '';`);
 } catch (error) {
   // Column might already exist
@@ -341,6 +348,7 @@ export const orderStatements = {
       prescriptionStatus,
       prescriptionRejectionReason,
       prescriptionFileName,
+      prescriptionFilePath,
       estimatedDelivery,
       actualDelivery,
       paymentMethod,
@@ -348,7 +356,7 @@ export const orderStatements = {
       createdAt,
       updatedAt
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `),
   getAll: db.prepare('SELECT * FROM orders'),
   getById: db.prepare('SELECT * FROM orders WHERE id = ?'),

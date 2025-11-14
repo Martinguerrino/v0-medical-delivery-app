@@ -127,36 +127,41 @@ export function OrderForm({ medication, pharmacyPrice, pharmacyName, deliveryFee
       const lineFinalPrice = finalUnitPrice * formData.quantity
       const lineInsuranceSavings = unitSavings * formData.quantity
 
+      const payload = {
+        customerId: user.id,
+        pharmacyId: pharmacyPrice.pharmacyId,
+        pharmacyName,
+        deliveryAddress: formData.deliveryAddress,
+        deliveryInstructions: formData.deliveryInstructions || null,
+        paymentMethod: formData.paymentMethod,
+        insuranceUsed: userInsuranceData?.id || userInsuranceData?.name || "",
+        prescriptionRequired: medication.requiresPrescription,
+        prescriptionUploaded: Boolean(formData.prescriptionFile),
+        prescriptionStatus: "pending" as const,
+        prescriptionFileName: formData.prescriptionFile?.name || null,
+        items: [
+          {
+            medicationId: medication.id,
+            medicationName: medication.name,
+            brand: medication.brand,
+            quantity: formData.quantity,
+            unitPrice: baseUnitPrice,
+            finalPrice: lineFinalPrice,
+            insuranceSavings: lineInsuranceSavings,
+          },
+        ],
+        deliveryFee: effectiveDeliveryFee,
+      }
+
+      const submission = new FormData()
+      submission.append("payload", JSON.stringify(payload))
+      if (formData.prescriptionFile) {
+        submission.append("prescriptionFile", formData.prescriptionFile)
+      }
+
       const response = await fetch("/api/orders", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          customerId: user.id,
-          pharmacyId: pharmacyPrice.pharmacyId,
-          pharmacyName,
-          deliveryAddress: formData.deliveryAddress,
-          deliveryInstructions: formData.deliveryInstructions || null,
-          paymentMethod: formData.paymentMethod,
-          insuranceUsed: userInsuranceData?.id || userInsuranceData?.name || "",
-          prescriptionRequired: medication.requiresPrescription,
-          prescriptionUploaded: Boolean(formData.prescriptionFile),
-          prescriptionStatus: "pending",
-          prescriptionFileName: formData.prescriptionFile?.name || null,
-          items: [
-            {
-              medicationId: medication.id,
-              medicationName: medication.name,
-              brand: medication.brand,
-              quantity: formData.quantity,
-              unitPrice: baseUnitPrice,
-              finalPrice: lineFinalPrice,
-              insuranceSavings: lineInsuranceSavings,
-            },
-          ],
-          deliveryFee: effectiveDeliveryFee,
-        }),
+        body: submission,
       })
 
       if (!response.ok) {
