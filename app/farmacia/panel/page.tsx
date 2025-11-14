@@ -19,7 +19,7 @@ import {
   FileText,
 } from "lucide-react"
 import type { FarmaciaUser } from "@/lib/types/user-types"
-import type { OrderStatus, OrderWithItems, PrescriptionStatus } from "@/lib/types/orders"
+import type { OrderStatus, OrderWithItems } from "@/lib/types/orders"
 import { useToast } from "@/hooks/use-toast"
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
@@ -39,18 +39,6 @@ const STATUS_COLORS: Record<OrderStatus, string> = {
 }
 
 const ACTIONABLE_STATUSES: OrderStatus[] = ["processing", "accepted"]
-
-const PRESCRIPTION_STATUS_LABELS: Record<PrescriptionStatus, string> = {
-  pending: "Pendiente",
-  approved: "Aprobada",
-  rejected: "Rechazada",
-}
-
-const PRESCRIPTION_STATUS_CLASSES: Record<PrescriptionStatus, string> = {
-  pending: "bg-amber-100 text-amber-800 border-amber-200",
-  approved: "bg-green-100 text-green-800 border-green-200",
-  rejected: "bg-red-100 text-red-800 border-red-200",
-}
 
 export default function FarmaciaPanelPage() {
   const router = useRouter()
@@ -335,10 +323,6 @@ export default function FarmaciaPanelPage() {
               >
                 Gestionar inventario
               </Button>
-              <Button className="w-full" variant="outline" onClick={() => router.push("/pedidos")}
-              >
-                Ver pedidos de cliente
-              </Button>
             </CardContent>
           </Card>
         </section>
@@ -413,9 +397,6 @@ interface OrderRowProps {
 function OrderRow({ order, onUpdateStatus, isBusy, disabledActions }: OrderRowProps) {
   const statusLabel = STATUS_LABELS[order.status]
   const badgeClass = STATUS_COLORS[order.status]
-  const normalizedPrescriptionStatus = (order.prescriptionStatus ?? "pending") as PrescriptionStatus
-  const prescriptionStatusLabel = PRESCRIPTION_STATUS_LABELS[normalizedPrescriptionStatus]
-  const prescriptionStatusClass = PRESCRIPTION_STATUS_CLASSES[normalizedPrescriptionStatus]
   const handleOpenPrescription = () => {
     if (!order.prescriptionFileUrl) {
       window.alert("La receta aún no está disponible para descargar.")
@@ -482,12 +463,9 @@ function OrderRow({ order, onUpdateStatus, isBusy, disabledActions }: OrderRowPr
 
         {(order.prescriptionRequired || order.prescriptionUploaded || order.prescriptionFileName) && (
           <div className="space-y-3 rounded border bg-muted/40 p-3 text-sm">
-            <div className="flex items-center justify-between gap-2">
-              <div className="inline-flex items-center gap-2 font-medium">
-                <FileText className="h-4 w-4" />
-                <span>Receta médica</span>
-              </div>
-              <Badge className={prescriptionStatusClass}>{prescriptionStatusLabel}</Badge>
+            <div className="inline-flex items-center gap-2 font-medium">
+              <FileText className="h-4 w-4" />
+              <span>Receta médica</span>
             </div>
             {order.prescriptionRejectionReason && (
               <p className="text-xs text-red-700">Motivo: {order.prescriptionRejectionReason}</p>
@@ -508,9 +486,7 @@ function OrderRow({ order, onUpdateStatus, isBusy, disabledActions }: OrderRowPr
               </Button>
             </div>
             {!order.prescriptionFileUrl && (
-              <Badge variant="outline" className="text-muted-foreground">
-                Archivo no disponible
-              </Badge>
+              <p className="text-xs text-muted-foreground">Archivo no disponible</p>
             )}
           </div>
         )}

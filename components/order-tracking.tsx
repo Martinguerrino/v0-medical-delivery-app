@@ -15,12 +15,11 @@ import {
   MessageSquare,
   FileText,
   AlertTriangle,
-  XCircle,
   Truck,
   RefreshCcw,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
-import type { OrderStatus, OrderWithItems, PrescriptionStatus } from "@/lib/types/orders"
+import type { OrderStatus, OrderWithItems } from "@/lib/types/orders"
 
 const STATUS_CONFIG: Record<OrderStatus, { label: string; icon: LucideIcon; className: string; iconColor: string }> = {
   processing: {
@@ -55,15 +54,6 @@ const STATUS_CONFIG: Record<OrderStatus, { label: string; icon: LucideIcon; clas
   },
 }
 
-const PRESCRIPTION_BADGE_CONFIG: Record<
-  PrescriptionStatus,
-  { label: string; icon: LucideIcon; className: string }
-> = {
-  pending: { label: "Receta pendiente", icon: Clock, className: "bg-yellow-100 text-yellow-800" },
-  approved: { label: "Receta aprobada", icon: CheckCircle, className: "bg-green-100 text-green-800" },
-  rejected: { label: "Receta rechazada", icon: XCircle, className: "bg-red-100 text-red-800" },
-}
-
 const formatDateTime = (value?: string | null) => {
   if (!value) return "-"
   return new Date(value).toLocaleString("es-AR", {
@@ -92,19 +82,6 @@ const renderStatusIcon = (status: OrderStatus) => {
   const StatusIcon = config.icon
 
   return <StatusIcon className={`h-5 w-5 ${config.iconColor}`} />
-}
-
-const renderPrescriptionBadge = (status: PrescriptionStatus) => {
-  const config = PRESCRIPTION_BADGE_CONFIG[status]
-  if (!config) return null
-  const Icon = config.icon
-
-  return (
-    <Badge className={config.className}>
-      <Icon className="mr-1 h-3 w-3" />
-      {config.label}
-    </Badge>
-  )
 }
 
 export function OrderTracking() {
@@ -215,21 +192,8 @@ export function OrderTracking() {
             <AlertDescription>
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium">Estado de la receta médica</p>
-                    {renderPrescriptionBadge(order.prescriptionStatus)}
-                  </div>
-                  {order.prescriptionStatus === "pending" && (
-                    <p className="text-sm text-muted-foreground">
-                      La farmacia está validando tu receta. Esto puede tomar unos minutos.
-                    </p>
-                  )}
-                  {order.prescriptionStatus === "approved" && (
-                    <p className="text-sm text-muted-foreground">
-                      Tu receta fue aprobada. La farmacia continuará con la preparación del pedido.
-                    </p>
-                  )}
-                  {order.prescriptionStatus === "rejected" && (
+                  <p className="font-medium">Receta médica</p>
+                  {order.prescriptionStatus === "rejected" ? (
                     <div className="space-y-1">
                       <p className="text-sm font-medium text-red-700">
                         Motivo: {order.prescriptionRejectionReason || "Receta no válida"}
@@ -238,7 +202,9 @@ export function OrderTracking() {
                         Sube una nueva receta válida para que la farmacia pueda continuar.
                       </p>
                     </div>
-                  )}
+                  ) : order.prescriptionRejectionReason ? (
+                    <p className="text-sm text-muted-foreground">Motivo: {order.prescriptionRejectionReason}</p>
+                  ) : null}
                   <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                     <span>Archivo:</span>
                     {order.prescriptionFileUrl ? (
@@ -255,11 +221,11 @@ export function OrderTracking() {
                     )}
                   </div>
                 </div>
-                      {order.prescriptionStatus === "rejected" && (
-                        <Button size="sm" variant="outline" onClick={() => router.push("/pedidos")}>
-                          Cargar nueva receta
-                        </Button>
-                      )}
+                {order.prescriptionStatus === "rejected" && (
+                  <Button size="sm" variant="outline" onClick={() => router.push("/pedidos")}>
+                    Cargar nueva receta
+                  </Button>
+                )}
               </div>
             </AlertDescription>
           </Alert>

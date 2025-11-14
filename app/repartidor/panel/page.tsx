@@ -370,9 +370,6 @@ export default function RepartidorPanelPage() {
               <Button className="w-full" variant="outline" onClick={handleRefresh} disabled={isRefreshing || isLoadingOrders}>
                 <RefreshCcw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} /> Refrescar pedidos
               </Button>
-              <Button className="w-full" variant="outline" onClick={() => router.push("/pedidos")}>
-                Ver pedidos de clientes
-              </Button>
             </CardContent>
           </Card>
         </section>
