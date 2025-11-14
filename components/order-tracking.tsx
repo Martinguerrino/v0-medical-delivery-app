@@ -255,11 +255,11 @@ export function OrderTracking() {
                     )}
                   </div>
                 </div>
-                {order.prescriptionStatus === "rejected" && (
-                  <Button size="sm" variant="outline" onClick={() => router.push("/historial")}>
-                    Cargar nueva receta
-                  </Button>
-                )}
+                      {order.prescriptionStatus === "rejected" && (
+                        <Button size="sm" variant="outline" onClick={() => router.push("/pedidos")}>
+                          Cargar nueva receta
+                        </Button>
+                      )}
               </div>
             </AlertDescription>
           </Alert>
