@@ -8,48 +8,13 @@ import { Badge } from "@/components/ui/badge"
 import { Search, Filter } from "lucide-react"
 import { MedicationCardWithPharmacies } from "./medication-card-with-pharmacies"
 import { AdvancedFilters, type FilterState } from "./advanced-filters"
-import { insuranceOptions } from "@/lib/data/insurance"
-import type { ClientMedication, ClientMedicationPrice, ClientPharmacyMeta } from "@/lib/types/client-medication"
-import { pharmacies as fallbackPharmacies } from "@/lib/data/pharmacies"
+import type { ClientMedication, ClientMedicationPrice } from "@/lib/types/client-medication"
 
-const fallbackPharmacyMap = new Map(
-  fallbackPharmacies.flatMap((pharmacy) => {
-    const entries: Array<[string, (typeof fallbackPharmacies)[number]]> = [
-      [pharmacy.id, pharmacy],
-      [pharmacy.id.toLowerCase(), pharmacy],
-    ]
-    return entries
-  }),
-)
-
-const fallbackCategories = [
-  "Antibióticos",
-  "Cardiovasculares",
-  "Antidiabéticos",
-  "Gastroenterología",
-  "Endocrinología",
-]
+const fallbackCategories = ["Antibioticos", "Cardiovasculares", "Antidiabeticos", "Gastroenterologia", "Endocrinologia"]
 
 const createDefaultFilters = (): FilterState => ({
-  showOnlyInsuranceCovered: false,
-  selectedPharmacies: [],
-  maxDeliveryTime: 60,
-  maxDeliveryFee: 50000,
-  minRating: 0,
-  showOnlyOpen: false,
   maxPrice: 10000,
 })
-
-const parseDeliveryTime = (value?: string | null): number | null => {
-  if (!value) return null
-  const matches = value.match(/\d+/g)
-  if (!matches) return null
-  const numbers = matches
-    .map((segment) => Number.parseInt(segment, 10))
-    .filter((segment) => Number.isFinite(segment))
-  if (numbers.length === 0) return null
-  return Math.max(...numbers)
-}
 
 export function MedicationCatalog() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -58,38 +23,19 @@ export function MedicationCatalog() {
   const [userInsurance, setUserInsurance] = useState<string>("")
   const [filters, setFilters] = useState<FilterState>(() => createDefaultFilters())
   const [medications, setMedications] = useState<ClientMedication[]>([])
-  const [pharmaciesMeta, setPharmaciesMeta] = useState<ClientPharmacyMeta[]>([])
   const [loadingData, setLoadingData] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
 
-  const fallbackPharmaciesMeta = useMemo<ClientPharmacyMeta[]>(
-    () =>
-      fallbackPharmacies
-        .map((pharmacy) => ({
-          id: pharmacy.id,
-          name: pharmacy.name,
-          rating: pharmacy.rating,
-          deliveryFee: pharmacy.deliveryFee,
-          deliveryTime: pharmacy.deliveryTime,
-          isOpen: pharmacy.isOpen,
-          address: pharmacy.address,
-          phone: pharmacy.phone,
-          logo: pharmacy.logo,
-          minOrder: pharmacy.minOrder,
-        }))
-        .sort((a, b) => a.name.localeCompare(b.name)),
-    [],
-  )
-
   useEffect(() => {
     const storedUser = localStorage.getItem("user")
-    if (storedUser) {
-      try {
-        const userData = JSON.parse(storedUser)
-        setUserInsurance(userData.obraSocial || "")
-      } catch (error) {
-        console.error("Error parsing stored user:", error)
-      }
+    if (!storedUser) {
+      return
+    }
+    try {
+      const userData = JSON.parse(storedUser)
+      setUserInsurance(userData.obraSocial || "")
+    } catch (error) {
+      console.error("Error parsing stored user:", error)
     }
   }, [])
 
@@ -106,83 +52,17 @@ export function MedicationCatalog() {
 
         const data = (await response.json()) as ClientMedication[]
         setMedications(data)
-
-        const pharmacyAccumulator = new Map<string, ClientPharmacyMeta>()
-        data.forEach((medication) => {
-          medication.prices.forEach((price) => {
-            const pharmacyId = price.pharmacyId
-            if (!pharmacyId || pharmacyAccumulator.has(pharmacyId)) {
-              return
-            }
-
-            const fallback =
-              fallbackPharmacyMap.get(pharmacyId) ||
-              (price.pharmacySlug ? fallbackPharmacyMap.get(price.pharmacySlug) : undefined)
-
-            pharmacyAccumulator.set(pharmacyId, {
-              id: pharmacyId,
-              name: price.pharmacyName ?? fallback?.name ?? pharmacyId,
-              rating: typeof price.rating === "number" ? price.rating : fallback?.rating ?? 0,
-              deliveryFee: typeof price.deliveryFee === "number" ? price.deliveryFee : fallback?.deliveryFee ?? 0,
-              deliveryTime: price.deliveryTime ?? fallback?.deliveryTime ?? "30-45 min",
-              isOpen: typeof price.isOpen === "boolean" ? price.isOpen : fallback?.isOpen ?? true,
-              address: price.address ?? fallback?.address ?? null,
-              phone: price.phone ?? fallback?.phone ?? null,
-              logo: price.logo ?? fallback?.logo ?? null,
-              minOrder: price.minOrder ?? fallback?.minOrder ?? null,
-            })
-          })
-        })
-
-        if (pharmacyAccumulator.size === 0) {
-          fallbackPharmacies.forEach((pharmacy) => {
-            pharmacyAccumulator.set(pharmacy.id, {
-              id: pharmacy.id,
-              name: pharmacy.name,
-              rating: pharmacy.rating,
-              deliveryFee: pharmacy.deliveryFee,
-              deliveryTime: pharmacy.deliveryTime,
-              isOpen: pharmacy.isOpen,
-              address: pharmacy.address,
-              phone: pharmacy.phone,
-              logo: pharmacy.logo,
-              minOrder: pharmacy.minOrder,
-            })
-          })
-        }
-
-        setPharmaciesMeta(Array.from(pharmacyAccumulator.values()).sort((a, b) => a.name.localeCompare(b.name)))
       } catch (error) {
         console.error("Error loading medication catalog:", error)
-        setLoadError(error instanceof Error ? error.message : "Error desconocido al cargar el catálogo")
-        setPharmaciesMeta(fallbackPharmaciesMeta)
+        setLoadError(error instanceof Error ? error.message : "Error desconocido al cargar el catalogo")
+        setMedications([])
       } finally {
         setLoadingData(false)
       }
     }
 
     void fetchCatalog()
-  }, [fallbackPharmaciesMeta])
-
-  const userInsuranceData = useMemo(() => {
-    if (!userInsurance) return undefined
-    const normalized = userInsurance.trim().toLowerCase()
-    return (
-      insuranceOptions.find((ins) => ins.id.toLowerCase() === normalized) ||
-      insuranceOptions.find((ins) => ins.name.toLowerCase() === normalized)
-    )
-  }, [userInsurance])
-
-  const insuranceNetwork = useMemo(() => {
-    if (!userInsuranceData) return [] as string[]
-    return userInsuranceData.pharmacyNetwork.map((entry) => entry.toLowerCase())
-  }, [userInsuranceData])
-
-  const pharmacyMetaMap = useMemo(() => {
-    const map = new Map<string, ClientPharmacyMeta>()
-    pharmaciesMeta.forEach((pharmacy) => map.set(pharmacy.id, pharmacy))
-    return map
-  }, [pharmaciesMeta])
+  }, [])
 
   const categoryOptions = useMemo(() => {
     const uniqueCategories = new Set<string>()
@@ -200,7 +80,6 @@ export function MedicationCatalog() {
   const filteredMedications = useMemo(() => {
     const results: Array<{ medication: ClientMedication; minAvailablePrice: number }> = []
     const normalizedSearch = searchTerm.trim().toLowerCase()
-    const networkSet = new Set(insuranceNetwork)
 
     medications.forEach((medication) => {
       const matchesCategory = selectedCategory === "Todos" || medication.category === selectedCategory
@@ -213,41 +92,7 @@ export function MedicationCatalog() {
         )
       if (!matchesSearch) return
 
-      if (filters.showOnlyInsuranceCovered && networkSet.size > 0) {
-        const hasCoverage = medication.prices.some((price) => {
-          const id = price.pharmacyId?.toLowerCase()
-          const slug = price.pharmacySlug?.toLowerCase()
-          return (id && networkSet.has(id)) || (slug && networkSet.has(slug))
-        })
-        if (!hasCoverage) return
-      }
-
-      if (filters.selectedPharmacies.length > 0) {
-        const hasSelected = medication.prices.some((price) => filters.selectedPharmacies.includes(price.pharmacyId))
-        if (!hasSelected) return
-      }
-
-      const availableEntries = medication.prices
-        .map((price) => {
-          const meta = pharmacyMetaMap.get(price.pharmacyId)
-          const rating = meta?.rating ?? (typeof price.rating === "number" ? price.rating : 0)
-          const deliveryFee = meta?.deliveryFee ?? (typeof price.deliveryFee === "number" ? price.deliveryFee : 0)
-          const deliveryTime = meta?.deliveryTime ?? price.deliveryTime ?? null
-          const isOpen = meta?.isOpen ?? (typeof price.isOpen === "boolean" ? price.isOpen : true)
-          return { price, rating, deliveryFee, deliveryTime, isOpen }
-        })
-        .filter(({ rating, deliveryFee, deliveryTime, isOpen }) => {
-          if (filters.showOnlyOpen && !isOpen) return false
-          if (rating < filters.minRating) return false
-          if (deliveryFee > filters.maxDeliveryFee) return false
-          const maxTime = parseDeliveryTime(deliveryTime)
-          if (maxTime !== null && maxTime > filters.maxDeliveryTime) return false
-          return true
-        })
-
-      if (availableEntries.length === 0) return
-
-      const minAvailablePrice = availableEntries.reduce((best, { price }) => {
+      const minAvailablePrice = medication.prices.reduce((best, price) => {
         const effectivePrice = price.discountedPrice ?? price.price
         return effectivePrice < best ? effectivePrice : best
       }, Number.POSITIVE_INFINITY)
@@ -269,7 +114,7 @@ export function MedicationCatalog() {
     })
 
     return sorted.map((entry) => entry.medication)
-  }, [medications, selectedCategory, searchTerm, filters, sortBy, insuranceNetwork, pharmacyMetaMap])
+  }, [medications, selectedCategory, searchTerm, filters.maxPrice, sortBy])
 
   const groupedMedications = useMemo(() => {
     const groups = new Map<
@@ -332,15 +177,8 @@ export function MedicationCatalog() {
   }, [filteredMedications])
 
   const activeFiltersCount = useMemo(() => {
-    return Object.entries(filters).filter(([key, value]) => {
-      if (key === "selectedPharmacies") return (value as string[]).length > 0
-      if (key === "maxDeliveryTime") return value < 60
-      if (key === "maxDeliveryFee") return value < 50000
-      if (key === "minRating") return value > 0
-      if (key === "maxPrice") return value < 10000
-      return value === true
-    }).length
-  }, [filters])
+    return filters.maxPrice < 10000 ? 1 : 0
+  }, [filters.maxPrice])
 
   const handleResetFilters = () => {
     setSearchTerm("")
@@ -348,16 +186,13 @@ export function MedicationCatalog() {
     setFilters(createDefaultFilters())
   }
 
-  const advancedFilterPharmacies = pharmaciesMeta.length > 0 ? pharmaciesMeta : fallbackPharmaciesMeta
-
   return (
     <section className="py-12 bg-background">
       <div className="container mx-auto px-4">
-        {/* Header */}
         <div className="text-center mb-8">
           <h2 className="text-3xl font-bold mb-4">Comparador de Precios</h2>
           <p className="text-muted-foreground text-lg">
-            Compara precios en múltiples farmacias y encuentra el mejor precio con tu obra social
+            Compara precios en multiples farmacias y encuentra el mejor precio con tu obra social
           </p>
           {userInsurance && (
             <div className="mt-4">
@@ -368,11 +203,10 @@ export function MedicationCatalog() {
           )}
         </div>
 
-        {/* Filters */}
         <div className="bg-card border border-border rounded-lg p-6 mb-8">
           <div className="grid md:grid-cols-4 gap-4">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 transform text-muted-foreground h-4 w-4" />
               <Input
                 placeholder="Buscar medicamento..."
                 value={searchTerm}
@@ -383,7 +217,7 @@ export function MedicationCatalog() {
 
             <Select value={selectedCategory} onValueChange={setSelectedCategory}>
               <SelectTrigger>
-                <SelectValue placeholder="Categoría" />
+                <SelectValue placeholder="Categoria" />
               </SelectTrigger>
               <SelectContent>
                 {categoryOptions.map((category) => (
@@ -401,15 +235,11 @@ export function MedicationCatalog() {
               <SelectContent>
                 <SelectItem value="name">Nombre</SelectItem>
                 <SelectItem value="price">Mejor precio</SelectItem>
-                <SelectItem value="category">Categoría</SelectItem>
+                <SelectItem value="category">Categoria</SelectItem>
               </SelectContent>
             </Select>
 
-            <AdvancedFilters
-              onFiltersChange={setFilters}
-              currentFilters={filters}
-              pharmacies={advancedFilterPharmacies}
-            />
+            <AdvancedFilters onFiltersChange={setFilters} currentFilters={filters} pharmacies={[]} />
           </div>
 
           {activeFiltersCount > 0 && (
@@ -425,22 +255,21 @@ export function MedicationCatalog() {
           )}
         </div>
 
-        {/* Results count */}
         <div className="mb-6">
           {loadingData ? (
             <p className="text-muted-foreground">Cargando medicamentos...</p>
           ) : loadError ? (
-            <p className="text-destructive">No se pudo cargar el catálogo: {loadError}</p>
+            <p className="text-destructive">No se pudo cargar el catalogo: {loadError}</p>
           ) : (
             <p className="text-muted-foreground">Mostrando {groupedMedications.length} medicamentos</p>
           )}
         </div>
 
         {loadingData ? (
-          <div className="text-center py-12 text-muted-foreground">Cargando catálogo...</div>
+          <div className="text-center py-12 text-muted-foreground">Cargando catalogo...</div>
         ) : loadError ? (
           <div className="text-center py-12">
-            <p className="text-destructive text-lg mb-4">No se pudo cargar el catálogo de medicamentos.</p>
+            <p className="text-destructive text-lg mb-4">No se pudo cargar el catalogo de medicamentos.</p>
             <Button variant="secondary" onClick={() => window.location.reload()}>
               Reintentar
             </Button>
@@ -454,7 +283,7 @@ export function MedicationCatalog() {
         ) : (
           <div className="text-center py-12">
             <p className="text-muted-foreground text-lg">
-              No se encontraron medicamentos que coincidan con tu búsqueda y filtros
+              No se encontraron medicamentos que coincidan con tu busqueda y filtros
             </p>
             <Button variant="secondary" className="mt-4" onClick={handleResetFilters}>
               Limpiar filtros
