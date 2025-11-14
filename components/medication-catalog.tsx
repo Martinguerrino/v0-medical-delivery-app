@@ -4,13 +4,13 @@ import { useState, useEffect, useMemo } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
-import { Search, Filter } from "lucide-react"
+import { Search } from "lucide-react"
 import { MedicationCardWithPharmacies } from "./medication-card-with-pharmacies"
-import { AdvancedFilters, type FilterState } from "./advanced-filters"
+import type { FilterState } from "./advanced-filters"
 import { insuranceOptions } from "@/lib/data/insurance"
-import type { ClientMedication, ClientPharmacyMeta } from "@/lib/types/client-medication"
+import type { ClientMedication, ClientMedicationPrice, ClientPharmacyMeta } from "@/lib/types/client-medication"
 import { pharmacies as fallbackPharmacies } from "@/lib/data/pharmacies"
+import { calculateFinalPrice } from "@/lib/utils/price-calculator"
 
 const fallbackPharmacyMap = new Map(
   fallbackPharmacies.flatMap((pharmacy) => {
@@ -197,7 +197,8 @@ export function MedicationCatalog() {
     return ["Todos", ...baseCategories]
   }, [medications])
 
-  const filteredMedications = useMemo(() => {
+  const medicationGroups = useMemo<Array<{ medication: ClientMedication; minPrice: number }>>(() => {
+    const insuranceId = userInsuranceData?.id ?? ""
     const results: Array<{ medication: ClientMedication; minAvailablePrice: number }> = []
     const normalizedSearch = searchTerm.trim().toLowerCase()
     const networkSet = new Set(insuranceNetwork)
@@ -234,7 +235,8 @@ export function MedicationCatalog() {
           const deliveryFee = meta?.deliveryFee ?? (typeof price.deliveryFee === "number" ? price.deliveryFee : 0)
           const deliveryTime = meta?.deliveryTime ?? price.deliveryTime ?? null
           const isOpen = meta?.isOpen ?? (typeof price.isOpen === "boolean" ? price.isOpen : true)
-          return { price, rating, deliveryFee, deliveryTime, isOpen }
+          const finalPrice = calculateFinalPrice(price, insuranceId).finalPrice
+          return { price, rating, deliveryFee, deliveryTime, isOpen, finalPrice }
         })
         .filter(({ rating, deliveryFee, deliveryTime, isOpen }) => {
           if (filters.showOnlyOpen && !isOpen) return false
@@ -247,9 +249,8 @@ export function MedicationCatalog() {
 
       if (availableEntries.length === 0) return
 
-      const minAvailablePrice = availableEntries.reduce((best, { price }) => {
-        const effectivePrice = price.discountedPrice ?? price.price
-        return effectivePrice < best ? effectivePrice : best
+      const minAvailablePrice = availableEntries.reduce((best, { finalPrice }) => {
+        return finalPrice < best ? finalPrice : best
       }, Number.POSITIVE_INFINITY)
 
       if (!Number.isFinite(minAvailablePrice) || minAvailablePrice > filters.maxPrice) return
@@ -257,38 +258,93 @@ export function MedicationCatalog() {
       results.push({ medication, minAvailablePrice })
     })
 
-    const sorted = results.sort((a, b) => {
+  // Consolidate medications sharing the same display name so we can unify their pharmacy offers
+  const grouped = new Map<string, { base: ClientMedication; medications: ClientMedication[] }>()
+
+    results.forEach(({ medication, minAvailablePrice }) => {
+      const key = medication.name.trim().toLowerCase()
+      const existing = grouped.get(key)
+      if (existing) {
+        existing.medications.push(medication)
+      } else {
+        grouped.set(key, { base: medication, medications: [medication] })
+      }
+    })
+
+    const aggregated = Array.from(grouped.values()).map(({ base, medications: meds }) => {
+      const priceMap = new Map<string, { price: ClientMedicationPrice; finalPrice: number }>()
+
+      meds.forEach((med) => {
+        med.prices.forEach((price) => {
+          const pharmacyKey = price.pharmacyId || `${price.pharmacySlug ?? ""}-${price.pharmacyName ?? ""}`
+          if (!pharmacyKey) return
+
+          const finalPrice = calculateFinalPrice(price, insuranceId).finalPrice
+          const existing = priceMap.get(pharmacyKey)
+
+          if (!existing || finalPrice < existing.finalPrice) {
+            priceMap.set(pharmacyKey, { price, finalPrice })
+          }
+        })
+      })
+
+      const mergedEntries = Array.from(priceMap.values()).sort((a, b) => a.finalPrice - b.finalPrice)
+      const mergedPrices = mergedEntries.map((entry) => entry.price)
+      const minPrice = mergedEntries.length > 0 ? mergedEntries[0].finalPrice : Number.POSITIVE_INFINITY
+
+      return {
+        medication: {
+          ...base,
+          prices: mergedPrices,
+        },
+        minPrice,
+      }
+    })
+
+    aggregated.sort((a, b) => {
       switch (sortBy) {
-        case "price":
-          return a.minAvailablePrice - b.minAvailablePrice
+        case "price": {
+          const aHasPrice = Number.isFinite(a.minPrice)
+          const bHasPrice = Number.isFinite(b.minPrice)
+
+          if (aHasPrice && bHasPrice) {
+            const diff = a.minPrice - b.minPrice
+            if (diff !== 0) return diff
+          } else if (aHasPrice) {
+            return -1
+          } else if (bHasPrice) {
+            return 1
+          }
+
+          return a.medication.name.localeCompare(b.medication.name)
+        }
         case "category":
-          return a.medication.category.localeCompare(b.medication.category)
+          return (
+            a.medication.category.localeCompare(b.medication.category) ||
+            a.medication.name.localeCompare(b.medication.name)
+          )
         default:
           return a.medication.name.localeCompare(b.medication.name)
       }
     })
 
-    return sorted.map((entry) => entry.medication)
-  }, [medications, selectedCategory, searchTerm, filters, sortBy, insuranceNetwork, pharmacyMetaMap])
-
-  const activeFiltersCount = useMemo(() => {
-    return Object.entries(filters).filter(([key, value]) => {
-      if (key === "selectedPharmacies") return (value as string[]).length > 0
-      if (key === "maxDeliveryTime") return value < 60
-      if (key === "maxDeliveryFee") return value < 50000
-      if (key === "minRating") return value > 0
-      if (key === "maxPrice") return value < 10000
-      return value === true
-    }).length
-  }, [filters])
+    return aggregated
+  }, [
+    medications,
+    selectedCategory,
+    searchTerm,
+    filters,
+    sortBy,
+    insuranceNetwork,
+    pharmacyMetaMap,
+    userInsuranceData,
+  ])
 
   const handleResetFilters = () => {
     setSearchTerm("")
     setSelectedCategory("Todos")
     setFilters(createDefaultFilters())
   }
-
-  const advancedFilterPharmacies = pharmaciesMeta.length > 0 ? pharmaciesMeta : fallbackPharmaciesMeta
 
   return (
     <section className="py-12 bg-background">
@@ -299,18 +355,11 @@ export function MedicationCatalog() {
           <p className="text-muted-foreground text-lg">
             Compara precios en múltiples farmacias y encuentra el mejor precio con tu obra social
           </p>
-          {userInsurance && (
-            <div className="mt-4">
-              <Badge variant="secondary" className="text-sm">
-                Precios calculados con {userInsurance}
-              </Badge>
-            </div>
-          )}
         </div>
 
         {/* Filters */}
         <div className="bg-card border border-border rounded-lg p-6 mb-8">
-          <div className="grid md:grid-cols-4 gap-4">
+          <div className="grid md:grid-cols-3 gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
               <Input
@@ -344,25 +393,7 @@ export function MedicationCatalog() {
                 <SelectItem value="category">Categoría</SelectItem>
               </SelectContent>
             </Select>
-
-            <AdvancedFilters
-              onFiltersChange={setFilters}
-              currentFilters={filters}
-              pharmacies={advancedFilterPharmacies}
-            />
           </div>
-
-          {activeFiltersCount > 0 && (
-            <div className="mt-4 pt-4 border-t border-border">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Filter className="h-4 w-4" />
-                <span>
-                  {activeFiltersCount} filtro{activeFiltersCount > 1 ? "s" : ""} activo
-                  {activeFiltersCount > 1 ? "s" : ""}
-                </span>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Results count */}
@@ -372,7 +403,7 @@ export function MedicationCatalog() {
           ) : loadError ? (
             <p className="text-destructive">No se pudo cargar el catálogo: {loadError}</p>
           ) : (
-            <p className="text-muted-foreground">Mostrando {filteredMedications.length} medicamentos</p>
+            <p className="text-muted-foreground">Mostrando {medicationGroups.length} medicamentos</p>
           )}
         </div>
 
@@ -385,10 +416,10 @@ export function MedicationCatalog() {
               Reintentar
             </Button>
           </div>
-        ) : filteredMedications.length > 0 ? (
+        ) : medicationGroups.length > 0 ? (
           <div className="grid md:grid-cols-1 lg:grid-cols-2 gap-6">
-            {filteredMedications.map((medication) => (
-              <MedicationCardWithPharmacies key={medication.id} medication={medication} />
+            {medicationGroups.map(({ medication }) => (
+              <MedicationCardWithPharmacies key={`${medication.id}-${medication.name}`} medication={medication} />
             ))}
           </div>
         ) : (
