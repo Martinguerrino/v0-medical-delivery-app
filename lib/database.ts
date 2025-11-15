@@ -504,6 +504,7 @@ export const inventoryStatements = {
   getByPharmacyId: db.prepare('SELECT * FROM inventory WHERE pharmacyId = ?'),
   getByMedicationId: db.prepare('SELECT * FROM inventory WHERE medicationId = ?'),
   getAll: db.prepare('SELECT * FROM inventory'),
+  getItem: db.prepare('SELECT * FROM inventory WHERE pharmacyId = ? AND medicationId = ?'),
   update: db.prepare(`
     UPDATE inventory SET
       precio = ?, stock = ?, lastUpdated = ?

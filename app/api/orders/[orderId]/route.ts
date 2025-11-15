@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { orderStatements } from "@/lib/database"
+import { orderStatements, orderItemStatements, inventoryStatements, db } from "@/lib/database"
 import { mapOrderRow } from "@/lib/server/orders"
 import type { OrderStatus } from "@/lib/types/orders"
 import { isOrderStatus } from "@/lib/types/orders"
@@ -82,18 +82,96 @@ export async function PATCH(request: NextRequest, { params }: { params: { orderI
       updatedCourierId = null
     }
 
+    const restockAdjustments: Array<{ medicationId: number; stock: number; price: number; operation: "update" | "insert" }> = []
+
+    if (nextStatus === "cancelled") {
+      const orderItemRows = orderItemStatements.getByOrderId.all(orderId) as Array<{
+        medicationId: number
+        quantity: number
+        unitPrice: number
+        finalPrice: number
+      }>
+
+      const quantitiesByMedication = new Map<number, { quantity: number; fallbackPrice: number }>()
+
+      for (const row of orderItemRows) {
+        const medicationId = Number(row.medicationId)
+        const quantity = Math.max(0, Number(row.quantity ?? 0))
+        const fallbackPriceValue = Number(row.unitPrice ?? row.finalPrice ?? 0)
+        const fallbackPrice = Number.isFinite(fallbackPriceValue) && fallbackPriceValue > 0 ? fallbackPriceValue : 0
+        const existing = quantitiesByMedication.get(medicationId)
+
+        if (existing) {
+          existing.quantity += quantity
+          if (existing.fallbackPrice <= 0 && fallbackPrice > 0) {
+            existing.fallbackPrice = fallbackPrice
+          }
+        } else {
+          quantitiesByMedication.set(medicationId, {
+            quantity,
+            fallbackPrice,
+          })
+        }
+      }
+
+      for (const [medicationId, request] of quantitiesByMedication.entries()) {
+        const inventoryRecord = inventoryStatements.getItem.get(currentOrder.pharmacyId, medicationId) as any
+
+        if (inventoryRecord) {
+          const currentStock = Number(inventoryRecord.stock ?? 0)
+          restockAdjustments.push({
+            medicationId,
+            stock: currentStock + request.quantity,
+            price: Number(inventoryRecord.precio ?? request.fallbackPrice ?? 0),
+            operation: "update",
+          })
+        } else {
+          restockAdjustments.push({
+            medicationId,
+            stock: request.quantity,
+            price: request.fallbackPrice,
+            operation: "insert",
+          })
+        }
+      }
+    }
+
     const now = new Date().toISOString()
     const actualDelivery = nextStatus === "delivered" ? now : null
     const estimatedDelivery = body.estimatedDelivery ?? null
 
-    orderStatements.updateLifecycle.run(
-      nextStatus,
-      updatedCourierId,
-      estimatedDelivery,
-      actualDelivery,
-      now,
-      orderId,
-    )
+    const applyUpdate = db.transaction(() => {
+      orderStatements.updateLifecycle.run(
+        nextStatus,
+        updatedCourierId,
+        estimatedDelivery,
+        actualDelivery,
+        now,
+        orderId,
+      )
+
+      restockAdjustments.forEach((adjustment) => {
+        if (adjustment.operation === "update") {
+          inventoryStatements.update.run(
+            adjustment.price,
+            adjustment.stock,
+            now,
+            currentOrder.pharmacyId,
+            adjustment.medicationId,
+          )
+        } else {
+          inventoryStatements.insert.run(
+            currentOrder.pharmacyId,
+            adjustment.medicationId,
+            adjustment.price,
+            adjustment.stock,
+            now,
+          )
+        }
+      })
+    })
+
+    applyUpdate()
 
   const updatedRow = orderStatements.getById.get(orderId)
   const updatedOrder = updatedRow ? mapOrderRow(updatedRow) : null

@@ -288,7 +288,7 @@ export const medicationStatements = {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `),
     getAll: db.prepare('SELECT * FROM medications'),
-    getById: db.prepare('SELECT * FROM medications WHERE id = ?'),
+  getById: db.prepare('SELECT * FROM medications WHERE id = ?'),
     update: db.prepare(`
     UPDATE medications SET
       name = ?, genericName = ?, brand = ?, category = ?, requiresPrescription = ?, description = ?, dosage = ?, presentation = ?, activeIngredient = ?, laboratory = ?

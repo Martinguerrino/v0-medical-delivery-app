@@ -2,7 +2,7 @@ import { randomUUID } from "crypto"
 import { promises as fs } from "fs"
 import path from "path"
 import { NextRequest, NextResponse } from "next/server"
-import { orderStatements, orderItemStatements, userStatements } from "@/lib/database"
+import { orderStatements, orderItemStatements, userStatements, inventoryStatements, db } from "@/lib/database"
 import type { OrderStatus, OrderWithItems, PrescriptionStatus } from "@/lib/types/orders"
 import { ORDER_STATUS_SEQUENCE } from "@/lib/types/orders"
 import { mapOrderRow, toNumber } from "@/lib/server/orders"
@@ -203,6 +203,47 @@ export async function POST(request: NextRequest) {
       }
     })
 
+    const stockRequests = new Map<
+      number,
+      { quantity: number; name: string; fallbackPrice: number }
+    >()
+
+    for (const item of normalizedItems) {
+      const existingRequest = stockRequests.get(item.medicationId)
+      if (existingRequest) {
+        existingRequest.quantity += item.quantity
+      } else {
+        stockRequests.set(item.medicationId, {
+          quantity: item.quantity,
+          name: item.medicationName,
+          fallbackPrice: item.unitPrice,
+        })
+      }
+    }
+
+    const stockAdjustments: Array<{ medicationId: number; newStock: number; price: number }> = []
+    for (const [medicationId, request] of stockRequests.entries()) {
+      const inventoryRecord = inventoryStatements.getItem.get(body.pharmacyId, medicationId) as any
+      if (!inventoryRecord) {
+        return NextResponse.json(
+          { error: `La farmacia no tiene inventario disponible para ${request.name}` },
+          { status: 409 },
+        )
+      }
+      const currentStock = Number(inventoryRecord.stock ?? 0)
+      if (currentStock < request.quantity) {
+        return NextResponse.json(
+          { error: `Stock insuficiente para ${request.name}` },
+          { status: 409 },
+        )
+      }
+      stockAdjustments.push({
+        medicationId,
+        newStock: currentStock - request.quantity,
+        price: Number(inventoryRecord.precio ?? request.fallbackPrice),
+      })
+    }
+
     const subtotal = normalizedItems.reduce((sum, item) => sum + item.finalPrice, 0)
     const deliveryFee = Math.max(0, toNumber(body.deliveryFee))
     const insuranceDiscount = normalizedItems.reduce((sum, item) => sum + item.insuranceSavings, 0)
@@ -223,48 +264,62 @@ export async function POST(request: NextRequest) {
 
     const prescriptionUploaded = Boolean(prescriptionFile ?? body.prescriptionUploaded)
 
-    orderStatements.insert.run(
-      orderId,
-      orderNumber,
-      now,
-      "processing",
-      body.customerId,
-      body.pharmacyId,
-      body.pharmacyName,
-      null,
-      subtotal,
-      deliveryFee,
-      insuranceDiscount,
-      total,
-      body.deliveryAddress,
-      body.deliveryInstructions ?? null,
-      prescriptionRequired ? 1 : 0,
-      prescriptionUploaded ? 1 : 0,
-      prescriptionStatus,
-      body.prescriptionRejectionReason ?? null,
-      originalFileName,
-      relativeFilePath,
-      estimatedDelivery,
-      null,
-      body.paymentMethod,
-      body.insuranceUsed ?? "",
-      now,
-      now,
-    )
-
-    normalizedItems.forEach((item) => {
-      orderItemStatements.insert.run(
+    const finalizeOrder = db.transaction(() => {
+      orderStatements.insert.run(
         orderId,
-        item.medicationId,
-        item.medicationName,
-        item.brand,
-        item.quantity,
-        item.unitPrice,
-        item.totalPrice,
-        item.finalPrice,
-        item.insuranceSavings,
+        orderNumber,
+        now,
+        "processing",
+        body.customerId,
+        body.pharmacyId,
+        body.pharmacyName,
+        null,
+        subtotal,
+        deliveryFee,
+        insuranceDiscount,
+        total,
+        body.deliveryAddress,
+        body.deliveryInstructions ?? null,
+        prescriptionRequired ? 1 : 0,
+        prescriptionUploaded ? 1 : 0,
+        prescriptionStatus,
+        body.prescriptionRejectionReason ?? null,
+        originalFileName,
+        relativeFilePath,
+        estimatedDelivery,
+        null,
+        body.paymentMethod,
+        body.insuranceUsed ?? "",
+        now,
+        now,
       )
+
+      normalizedItems.forEach((item) => {
+        orderItemStatements.insert.run(
+          orderId,
+          item.medicationId,
+          item.medicationName,
+          item.brand,
+          item.quantity,
+          item.unitPrice,
+          item.totalPrice,
+          item.finalPrice,
+          item.insuranceSavings,
+        )
+      })
+
+      stockAdjustments.forEach((adjustment) => {
+        inventoryStatements.update.run(
+          adjustment.price,
+          adjustment.newStock,
+          now,
+          body.pharmacyId,
+          adjustment.medicationId,
+        )
+      })
     })
+
+    finalizeOrder()
 
     const createdOrderRow = orderStatements.getById.get(orderId)
     const createdOrder = createdOrderRow ? mapOrderRow(createdOrderRow) : null
