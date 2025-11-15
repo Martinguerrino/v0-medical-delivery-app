@@ -23,6 +23,7 @@ interface AvailablePharmacyEntry {
   originalPrice: number
   displayedPrice: number
   hasDiscount: boolean
+  stock: number
   priceData: ClientMedicationPrice
 }
 
@@ -55,6 +56,7 @@ export function MedicationCardWithPharmacies({ medication }: MedicationCardWithP
         originalPrice: price.price,
         displayedPrice,
         hasDiscount: typeof price.discountedPrice === "number" && price.discountedPrice !== price.price,
+        stock: price.stock ?? 0,
         priceData: price,
       }
     })
@@ -135,6 +137,9 @@ export function MedicationCardWithPharmacies({ medication }: MedicationCardWithP
                         </span>
                         <span className="flex items-center gap-1">
                           <Truck className="h-3 w-3" />${pharmacy.deliveryFee.toLocaleString()}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Package className="h-3 w-3" />Stock: {pharmacy.stock}
                         </span>
                       </div>
                     </div>
