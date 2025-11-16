@@ -29,6 +29,11 @@ export interface OrderRecord {
   insuranceDiscount: number
   total: number
   deliveryAddress: string
+  deliveryAvenida?: number | null
+  deliveryCalle?: number | null
+  pharmacyAvenida?: number | null
+  pharmacyCalle?: number | null
+  deliveryDistance?: number | null
   deliveryInstructions?: string | null
   prescriptionRequired: boolean
   prescriptionUploaded: boolean

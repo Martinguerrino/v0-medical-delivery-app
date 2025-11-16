@@ -424,6 +424,11 @@ export default function RepartidorPanelPage() {
                         {order.deliveryInstructions && (
                           <p className="mt-1 text-xs text-muted-foreground">{order.deliveryInstructions}</p>
                         )}
+                        {typeof order.deliveryDistance === "number" && Number.isFinite(order.deliveryDistance) && (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Distancia: {order.deliveryDistance.toFixed(2)} cuadras · Envío: {currencyFormatter.format(order.deliveryFee)}
+                          </p>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center justify-between text-sm">
@@ -501,6 +506,14 @@ export default function RepartidorPanelPage() {
                               <span>Entrega estimada: {formatDateTime(order.estimatedDelivery)}</span>
                             </div>
                           )}
+                          {typeof order.deliveryDistance === "number" && Number.isFinite(order.deliveryDistance) && (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Bike className="h-4 w-4" />
+                              <span>
+                                Distancia: {order.deliveryDistance.toFixed(2)} cuadras · Envío: {currencyFormatter.format(order.deliveryFee)}
+                              </span>
+                            </div>
+                          )}
                           <div className="flex items-center justify-between text-sm">
                             <span>Total del pedido</span>
                             <span className="font-semibold">{currencyFormatter.format(order.total)}</span>
@@ -544,6 +557,12 @@ export default function RepartidorPanelPage() {
                             <span>Pago de envío</span>
                             <span className="font-semibold">{currencyFormatter.format(order.deliveryFee)}</span>
                           </div>
+                          {typeof order.deliveryDistance === "number" && Number.isFinite(order.deliveryDistance) && (
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <Bike className="h-4 w-4" />
+                              <span>Distancia recorrida: {order.deliveryDistance.toFixed(2)} cuadras</span>
+                            </div>
+                          )}
                           <div className="flex items-center justify-between text-xs text-muted-foreground">
                             <span>Total del pedido</span>
                             <span>{currencyFormatter.format(order.total)}</span>

@@ -16,6 +16,8 @@ export async function GET(request: NextRequest) {
         price: item.precio,
         inStock: item.stock > 0,
         pharmacyPriceId: item.id,
+        pharmacyAvenida: item.userAvenida ?? null,
+        pharmacyCalle: item.userCalle ?? null,
       }))
       return NextResponse.json(pharmacyMeds)
     } else {
@@ -23,7 +25,9 @@ export async function GET(request: NextRequest) {
 
       const medicationsMap = new Map<number, any>()
 
-      for (const item of inventoryItems) {
+      for (const rawItem of inventoryItems) {
+        const item = rawItem as any
+
         if (medicationIdParam && Number.parseInt(medicationIdParam, 10) !== item.medicationId) {
           continue
         }
@@ -69,6 +73,8 @@ export async function GET(request: NextRequest) {
           address: item.pharmacyAddress ?? null,
           phone: item.pharmacyPhone ?? null,
           logo: item.pharmacyLogo ?? null,
+          pharmacyAvenida: item.userAvenida ?? null,
+          pharmacyCalle: item.userCalle ?? null,
         })
       }
 

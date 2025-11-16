@@ -23,6 +23,19 @@ export const toNumber = (value: unknown): number => {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
+export const toNullableNumber = (value: unknown): number | null => {
+  if (value === null || value === undefined) {
+    return null
+  }
+
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) {
+    return null
+  }
+
+  return parsed
+}
+
 export const mapOrderItemRow = (row: any): OrderItemRecord => ({
   id: typeof row.id === "number" ? row.id : undefined,
   orderId: row.orderId,
@@ -56,6 +69,11 @@ export const mapOrderRow = (row: any): OrderWithItems => {
     insuranceDiscount: toNumber(row.insuranceDiscount),
     total: toNumber(row.total),
     deliveryAddress: row.deliveryAddress,
+  deliveryAvenida: toNullableNumber(row.deliveryAvenida),
+  deliveryCalle: toNullableNumber(row.deliveryCalle),
+  pharmacyAvenida: toNullableNumber(row.pharmacyAvenida),
+  pharmacyCalle: toNullableNumber(row.pharmacyCalle),
+  deliveryDistance: toNullableNumber(row.deliveryDistance),
     deliveryInstructions: toNullableString(row.deliveryInstructions),
     prescriptionRequired: toBoolean(row.prescriptionRequired),
     prescriptionUploaded: toBoolean(row.prescriptionUploaded),

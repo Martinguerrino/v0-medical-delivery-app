@@ -6,6 +6,7 @@ import { orderStatements, orderItemStatements, userStatements, inventoryStatemen
 import type { OrderStatus, OrderWithItems, PrescriptionStatus } from "@/lib/types/orders"
 import { ORDER_STATUS_SEQUENCE } from "@/lib/types/orders"
 import { mapOrderRow, toNumber } from "@/lib/server/orders"
+import { calculateDeliveryQuote, buildCoordinate } from "@/lib/utils/delivery"
 
 interface CreateOrderItemPayload {
   medicationId: number
@@ -22,6 +23,8 @@ interface CreateOrderPayload {
   pharmacyId: string
   pharmacyName: string
   deliveryAddress: string
+  deliveryAvenida: number
+  deliveryCalle: number
   deliveryInstructions?: string | null
   paymentMethod: string
   insuranceUsed?: string | null
@@ -31,7 +34,7 @@ interface CreateOrderPayload {
   prescriptionRejectionReason?: string | null
   prescriptionFileName?: string | null
   items: CreateOrderItemPayload[]
-  deliveryFee: number
+  deliveryFee?: number
   estimatedDelivery?: string
 }
 
@@ -154,6 +157,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Faltan datos de entrega o pago" }, { status: 400 })
     }
 
+    if (body.deliveryAvenida === undefined || body.deliveryCalle === undefined) {
+      return NextResponse.json({ error: "Faltan las coordenadas de entrega" }, { status: 400 })
+    }
+
+    const deliveryAvenidaValue = Math.round(Number(body.deliveryAvenida))
+    const deliveryCalleValue = Math.round(Number(body.deliveryCalle))
+
+    if (!Number.isFinite(deliveryAvenidaValue) || deliveryAvenidaValue <= 0) {
+      return NextResponse.json({ error: "La avenida de entrega es inválida" }, { status: 400 })
+    }
+
+    if (!Number.isFinite(deliveryCalleValue) || deliveryCalleValue <= 0) {
+      return NextResponse.json({ error: "La calle de entrega es inválida" }, { status: 400 })
+    }
+
     const customer = userStatements.getById.get(body.customerId) as any
     if (!customer) {
       return NextResponse.json({ error: "El cliente no existe" }, { status: 400 })
@@ -163,6 +181,24 @@ export async function POST(request: NextRequest) {
     if (!pharmacy || pharmacy.role !== "Farmacia") {
       return NextResponse.json({ error: "La farmacia no es válida" }, { status: 400 })
     }
+
+    const deliveryCoordinate = buildCoordinate(deliveryAvenidaValue, deliveryCalleValue)
+    if (!deliveryCoordinate) {
+      return NextResponse.json({ error: "Las coordenadas de entrega no son válidas" }, { status: 400 })
+    }
+
+    const pharmacyCoordinate = buildCoordinate(pharmacy.avenida, pharmacy.calle)
+    if (!pharmacyCoordinate) {
+      return NextResponse.json({ error: "La farmacia no tiene coordenadas configuradas" }, { status: 400 })
+    }
+
+    const { distance: rawDeliveryDistance, fee: computedDeliveryFee } = calculateDeliveryQuote(
+      pharmacyCoordinate,
+      deliveryCoordinate,
+    )
+
+    const deliveryDistance = rawDeliveryDistance != null ? Number(rawDeliveryDistance.toFixed(2)) : null
+    const deliveryFee = computedDeliveryFee
 
     const fileEntry = formData.get("prescriptionFile")
     const prescriptionFile = fileEntry instanceof File ? fileEntry : null
@@ -244,8 +280,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    const subtotal = normalizedItems.reduce((sum, item) => sum + item.finalPrice, 0)
-    const deliveryFee = Math.max(0, toNumber(body.deliveryFee))
+  const subtotal = normalizedItems.reduce((sum, item) => sum + item.finalPrice, 0)
     const insuranceDiscount = normalizedItems.reduce((sum, item) => sum + item.insuranceSavings, 0)
     const total = subtotal + deliveryFee
 
@@ -272,13 +307,18 @@ export async function POST(request: NextRequest) {
         "processing",
         body.customerId,
         body.pharmacyId,
-        body.pharmacyName,
-        null,
+  body.pharmacyName,
+  null,
         subtotal,
         deliveryFee,
         insuranceDiscount,
         total,
         body.deliveryAddress,
+  Math.round(deliveryCoordinate.avenida),
+  Math.round(deliveryCoordinate.calle),
+  Math.round(pharmacyCoordinate.avenida),
+  Math.round(pharmacyCoordinate.calle),
+  deliveryDistance,
         body.deliveryInstructions ?? null,
         prescriptionRequired ? 1 : 0,
         prescriptionUploaded ? 1 : 0,

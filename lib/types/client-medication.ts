@@ -15,6 +15,8 @@ export interface ClientMedicationPrice {
   address?: string | null
   phone?: string | null
   logo?: string | null
+  pharmacyAvenida?: number | null
+  pharmacyCalle?: number | null
 }
 
 export interface ClientMedication {

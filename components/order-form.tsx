@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Upload, FileText, CheckCircle2, AlertCircle, X } from "lucide-react"
 import type { ClientMedication, ClientMedicationPrice } from "@/lib/types/client-medication"
 import { useToast } from "@/hooks/use-toast"
+import { buildCoordinate, calculateDeliveryQuote } from "@/lib/utils/delivery"
 
 interface OrderFormProps {
   medication: ClientMedication
@@ -40,7 +41,42 @@ export function OrderForm({ medication, pharmacyPrice, pharmacyName, deliveryFee
   const user = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("user") || "{}") : {}
   const userInsurance = user.obraSocial || ""
 
-  const effectiveDeliveryFee = Number.isFinite(deliveryFee) ? deliveryFee : pharmacyPrice.deliveryFee ?? 0
+  const pharmacyCoordinate = useMemo(
+    () => buildCoordinate(pharmacyPrice.pharmacyAvenida, pharmacyPrice.pharmacyCalle),
+    [pharmacyPrice.pharmacyAvenida, pharmacyPrice.pharmacyCalle],
+  )
+
+  const deliveryCoordinate = useMemo(() => {
+    const avenidaValue = Number.parseInt(formData.deliveryAvenida, 10)
+    const calleValue = Number.parseInt(formData.deliveryCalle, 10)
+
+    if (!Number.isInteger(avenidaValue) || avenidaValue <= 0) {
+      return null
+    }
+
+    if (!Number.isInteger(calleValue) || calleValue <= 0) {
+      return null
+    }
+
+    return buildCoordinate(avenidaValue, calleValue)
+  }, [formData.deliveryAvenida, formData.deliveryCalle])
+
+  const deliveryQuote = useMemo(
+    () => calculateDeliveryQuote(pharmacyCoordinate, deliveryCoordinate),
+    [pharmacyCoordinate, deliveryCoordinate],
+  )
+
+  const fallbackDeliveryFee = (() => {
+    if (typeof deliveryFee === "number" && Number.isFinite(deliveryFee)) {
+      return deliveryFee
+    }
+    if (typeof pharmacyPrice.deliveryFee === "number" && Number.isFinite(pharmacyPrice.deliveryFee)) {
+      return pharmacyPrice.deliveryFee
+    }
+    return 0
+  })()
+
+  const effectiveDeliveryFee = pharmacyCoordinate && deliveryCoordinate ? deliveryQuote.fee : fallbackDeliveryFee
   const baseUnitPrice = pharmacyPrice.discountedPrice ?? pharmacyPrice.price
   const finalUnitPrice = baseUnitPrice
   const subtotal = finalUnitPrice * formData.quantity
@@ -132,6 +168,8 @@ export function OrderForm({ medication, pharmacyPrice, pharmacyName, deliveryFee
         pharmacyId: pharmacyPrice.pharmacyId,
         pharmacyName,
         deliveryAddress: formattedDeliveryAddress,
+        deliveryAvenida: deliveryAvenidaValue,
+        deliveryCalle: deliveryCalleValue,
         deliveryInstructions: formData.deliveryInstructions || null,
         paymentMethod: formData.paymentMethod,
         insuranceUsed: userInsurance || "",
@@ -208,6 +246,11 @@ export function OrderForm({ medication, pharmacyPrice, pharmacyName, deliveryFee
           <p>
             <span className="font-medium">Precio unitario:</span> ${finalUnitPrice.toLocaleString()}
           </p>
+          {pharmacyCoordinate && deliveryCoordinate && deliveryQuote.distance !== null && (
+            <p className="text-muted-foreground">
+              <span className="font-medium text-foreground">Distancia estimada:</span> {deliveryQuote.distance.toFixed(2)} cuadras
+            </p>
+          )}
         </div>
       </div>
 

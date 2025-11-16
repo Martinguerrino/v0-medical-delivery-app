@@ -62,6 +62,11 @@ db.exec(`
     insuranceDiscount REAL NOT NULL,
     total REAL NOT NULL,
     deliveryAddress TEXT NOT NULL,
+  deliveryAvenida INTEGER,
+  deliveryCalle INTEGER,
+  pharmacyAvenida INTEGER,
+  pharmacyCalle INTEGER,
+  deliveryDistance REAL,
     deliveryInstructions TEXT,
     prescriptionRequired BOOLEAN NOT NULL,
     prescriptionUploaded BOOLEAN NOT NULL,
@@ -279,6 +284,36 @@ try {
 }
 
 try {
+  db.exec(`ALTER TABLE orders ADD COLUMN deliveryAvenida INTEGER;`);
+} catch (error) {
+  // Column might already exist
+}
+
+try {
+  db.exec(`ALTER TABLE orders ADD COLUMN deliveryCalle INTEGER;`);
+} catch (error) {
+  // Column might already exist
+}
+
+try {
+  db.exec(`ALTER TABLE orders ADD COLUMN pharmacyAvenida INTEGER;`);
+} catch (error) {
+  // Column might already exist
+}
+
+try {
+  db.exec(`ALTER TABLE orders ADD COLUMN pharmacyCalle INTEGER;`);
+} catch (error) {
+  // Column might already exist
+}
+
+try {
+  db.exec(`ALTER TABLE orders ADD COLUMN deliveryDistance REAL;`);
+} catch (error) {
+  // Column might already exist
+}
+
+try {
   db.exec(`ALTER TABLE orders ADD COLUMN prescriptionFileName TEXT;`);
 } catch (error) {
   // Column might already exist
@@ -356,6 +391,11 @@ export const orderStatements = {
       insuranceDiscount,
       total,
       deliveryAddress,
+    deliveryAvenida,
+    deliveryCalle,
+    pharmacyAvenida,
+    pharmacyCalle,
+    deliveryDistance,
       deliveryInstructions,
       prescriptionRequired,
       prescriptionUploaded,
@@ -370,7 +410,7 @@ export const orderStatements = {
       createdAt,
       updatedAt
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `),
   getAll: db.prepare('SELECT * FROM orders'),
   getById: db.prepare('SELECT * FROM orders WHERE id = ?'),
@@ -545,9 +585,11 @@ export const inventoryStatements = {
       p.deliveryFee,
       p.isOpen AS pharmacyIsOpen,
       p.minOrder,
-      p.address AS pharmacyAddress,
-      p.phone AS pharmacyPhone,
-      p.logo AS pharmacyLogo
+    p.address AS pharmacyAddress,
+    p.phone AS pharmacyPhone,
+    p.logo AS pharmacyLogo,
+    u.avenida AS userAvenida,
+    u.calle AS userCalle
     FROM inventory i
     JOIN medications m ON i.medicationId = m.id
     LEFT JOIN users u ON i.pharmacyId = u.id
@@ -574,9 +616,11 @@ export const inventoryStatements = {
       p.deliveryFee,
       p.isOpen AS pharmacyIsOpen,
       p.minOrder,
-      p.address AS pharmacyAddress,
-      p.phone AS pharmacyPhone,
-      p.logo AS pharmacyLogo
+    p.address AS pharmacyAddress,
+    p.phone AS pharmacyPhone,
+    p.logo AS pharmacyLogo,
+    u.avenida AS userAvenida,
+    u.calle AS userCalle
     FROM inventory i
     JOIN medications m ON i.medicationId = m.id
     LEFT JOIN users u ON i.pharmacyId = u.id
@@ -654,21 +698,33 @@ export const migrateData = () => {
         order.orderNumber,
         order.date instanceof Date ? order.date.toISOString() : order.date,
         order.status,
+  order.customerId ?? 'cliente-1',
         order.pharmacyId,
         order.pharmacyName,
+  order.courierId ?? null,
         order.subtotal,
         order.deliveryFee,
         order.insuranceDiscount,
         order.total,
         order.deliveryAddress,
+        order.deliveryAvenida ?? null,
+        order.deliveryCalle ?? null,
+        order.pharmacyAvenida ?? null,
+        order.pharmacyCalle ?? null,
+        order.deliveryDistance ?? null,
+        order.deliveryInstructions ?? null,
         order.prescriptionRequired ? 1 : 0,
         order.prescriptionUploaded ? 1 : 0,
         order.prescriptionStatus,
         order.prescriptionRejectionReason || null,
+        order.prescriptionFileName ?? null,
+        order.prescriptionFilePath ?? null,
         order.estimatedDelivery,
         order.actualDelivery || null,
         order.paymentMethod,
-        order.insuranceUsed
+        order.insuranceUsed ?? null,
+        order.createdAt ?? (order.date instanceof Date ? order.date.toISOString() : order.date),
+        order.updatedAt ?? (order.date instanceof Date ? order.date.toISOString() : order.date)
       );
 
       // Insert order items
@@ -926,21 +982,33 @@ export const migrateData = () => {
       'ORD-TEST-001',
       new Date().toISOString(),
       'delivered',
+      'test-client',
       'farmacia-farmacity',
       'Farmacity',
+      null,
       1500.00,
       200.00,
       100.00,
       1600.00,
       'Calle Falsa 123, Buenos Aires',
+      1200,
+      800,
+      null,
+      null,
+      null,
+  null,
       1,
       1,
       'validated',
       null,
+      null,
+      null,
       new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(), // 2 hours later
       new Date(Date.now() + 1 * 60 * 60 * 1000).toISOString(), // 1 hour ago
       'efectivo',
-      'OSDE'
+      'OSDE',
+      new Date().toISOString(),
+      new Date().toISOString()
     );
 
     // Add order item
