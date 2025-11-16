@@ -289,9 +289,6 @@ export function OrderTracking() {
               </div>
               <div className="text-right">
                 <p className="text-sm font-medium">${item.finalPrice.toLocaleString()}</p>
-                {item.insuranceSavings > 0 && (
-                  <p className="text-xs text-green-600">Ahorro: ${item.insuranceSavings.toLocaleString()}</p>
-                )}
               </div>
             </div>
           ))}
@@ -306,19 +303,10 @@ export function OrderTracking() {
             <span>Envío</span>
             <span>${order.deliveryFee.toLocaleString()}</span>
           </div>
-          {order.insuranceDiscount > 0 && (
-            <div className="flex justify-between text-sm text-green-600">
-              <span>Descuento obra social</span>
-              <span>- ${order.insuranceDiscount.toLocaleString()}</span>
-            </div>
-          )}
           <div className="flex justify-between border-t pt-2 text-lg font-bold">
             <span>Total</span>
             <span className="text-primary">${order.total.toLocaleString()}</span>
           </div>
-          {order.insuranceUsed && (
-            <p className="text-xs text-muted-foreground">Obra social utilizada: {order.insuranceUsed}</p>
-          )}
         </div>
 
         <div className="border-t pt-4" />

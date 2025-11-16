@@ -4,7 +4,6 @@ import { useState, useEffect, useMemo } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
 import { Search, Filter } from "lucide-react"
 import { MedicationCardWithPharmacies } from "./medication-card-with-pharmacies"
 import { AdvancedFilters, type FilterState } from "./advanced-filters"
@@ -20,24 +19,10 @@ export function MedicationCatalog() {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("Todos")
   const [sortBy, setSortBy] = useState("name")
-  const [userInsurance, setUserInsurance] = useState<string>("")
   const [filters, setFilters] = useState<FilterState>(() => createDefaultFilters())
   const [medications, setMedications] = useState<ClientMedication[]>([])
   const [loadingData, setLoadingData] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
-
-  useEffect(() => {
-    const storedUser = localStorage.getItem("user")
-    if (!storedUser) {
-      return
-    }
-    try {
-      const userData = JSON.parse(storedUser)
-      setUserInsurance(userData.obraSocial || "")
-    } catch (error) {
-      console.error("Error parsing stored user:", error)
-    }
-  }, [])
 
   useEffect(() => {
     const fetchCatalog = async () => {
@@ -192,15 +177,8 @@ export function MedicationCatalog() {
         <div className="text-center mb-8">
           <h2 className="text-3xl font-bold mb-4">Comparador de Precios</h2>
           <p className="text-muted-foreground text-lg">
-            Compara precios en multiples farmacias y encuentra el mejor precio con tu obra social
+            Compara precios en múltiples farmacias y encuentra la mejor oferta para tu pedido
           </p>
-          {userInsurance && (
-            <div className="mt-4">
-              <Badge variant="secondary" className="text-sm">
-                Precios calculados con {userInsurance}
-              </Badge>
-            </div>
-          )}
         </div>
 
         <div className="bg-card border border-border rounded-lg p-6 mb-8">

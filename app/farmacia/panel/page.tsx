@@ -435,7 +435,6 @@ function OrderRow({ order, onUpdateStatus, isBusy, disabledActions }: OrderRowPr
             <p className="font-medium">Pago</p>
             <p className="text-muted-foreground">Método: {order.paymentMethod}</p>
             <p className="text-muted-foreground">Total: ${order.total.toLocaleString()}</p>
-            {order.insuranceUsed && <p className="text-muted-foreground">Obra social: {order.insuranceUsed}</p>}
           </div>
         </div>
 
@@ -452,9 +451,6 @@ function OrderRow({ order, onUpdateStatus, isBusy, disabledActions }: OrderRowPr
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-medium">${item.finalPrice.toLocaleString()}</p>
-                  {item.insuranceSavings > 0 && (
-                    <p className="text-xs text-green-600">Ahorro: ${item.insuranceSavings.toLocaleString()}</p>
-                  )}
                 </div>
               </div>
             ))}

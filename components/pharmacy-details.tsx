@@ -23,7 +23,6 @@ import {
   Instagram,
   CreditCard,
   Stethoscope,
-  Users,
 } from "lucide-react"
 import type { Pharmacy } from "@/lib/data/pharmacies"
 
@@ -166,23 +165,6 @@ export function PharmacyDetails({ pharmacy, onClose }: PharmacyDetailsProps) {
             ))}
           </div>
         </div>
-
-        {/* Obras sociales */}
-        <div>
-          <h4 className="font-medium mb-2 flex items-center gap-2">
-            <Users className="h-4 w-4 text-primary" />
-            Obras sociales aceptadas
-          </h4>
-          <div className="flex flex-wrap gap-1">
-            {pharmacy.acceptedInsurance.map((insurance) => (
-              <Badge key={insurance} variant="secondary" className="text-xs">
-                {insurance}
-              </Badge>
-            ))}
-          </div>
-        </div>
-
-        <Separator />
 
         {/* Características adicionales */}
         <div className="grid grid-cols-2 gap-4">

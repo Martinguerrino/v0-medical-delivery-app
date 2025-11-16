@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { ShoppingCart, AlertTriangle, Info, Clock, Truck, Star, Shield, TrendingDown } from "lucide-react"
+import { ShoppingCart, AlertTriangle, Info, Clock, Truck, Star, TrendingDown } from "lucide-react"
 import { pharmacies } from "@/lib/data/pharmacies"
 import { calculateFinalPrice, formatPrice } from "@/lib/utils/price-calculator"
 import type { MedicationMultiPharmacy } from "@/lib/data/medications-multi-pharmacy"
@@ -148,16 +148,6 @@ export function PriceComparisonCard({ medication }: PriceComparisonCardProps) {
             ))}
           </div>
         </div>
-
-        {userInsurance && (
-          <div className="bg-primary/5 border border-primary/20 rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-1">
-              <Shield className="h-4 w-4 text-primary" />
-              <span className="text-sm font-medium">Tu obra social</span>
-            </div>
-            <p className="text-xs text-muted-foreground">Precios calculados con tu cobertura actual</p>
-          </div>
-        )}
 
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <AlertTriangle className="h-4 w-4 text-secondary" />

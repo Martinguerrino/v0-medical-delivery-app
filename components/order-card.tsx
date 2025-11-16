@@ -10,7 +10,6 @@ import {
   Calendar,
   MapPin,
   CreditCard,
-  Shield,
   FileText,
   Truck,
   CheckCircle,
@@ -106,9 +105,6 @@ export function OrderCard({ order }: OrderCardProps) {
               </div>
               <div className="text-right">
                 <p className="font-medium text-sm">{formatPrice(item.finalPrice)}</p>
-                {item.insuranceSavings > 0 && (
-                  <p className="text-xs text-green-600">Ahorro: {formatPrice(item.insuranceSavings)}</p>
-                )}
               </div>
             </div>
           ))}
@@ -126,12 +122,6 @@ export function OrderCard({ order }: OrderCardProps) {
             <span>Envío:</span>
             <span>{formatPrice(order.deliveryFee)}</span>
           </div>
-          {order.insuranceDiscount > 0 && (
-            <div className="flex justify-between text-sm text-green-600">
-              <span>Descuento obra social:</span>
-              <span>-{formatPrice(order.insuranceDiscount)}</span>
-            </div>
-          )}
           <Separator />
           <div className="flex justify-between font-medium">
             <span>Total:</span>
@@ -158,17 +148,6 @@ export function OrderCard({ order }: OrderCardProps) {
             </div>
             <p className="ml-6">{order.paymentMethod}</p>
           </div>
-
-          {order.insuranceUsed && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Shield className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Obra social:</span>
-              </div>
-              <p className="ml-6">{order.insuranceUsed}</p>
-            </div>
-          )}
-
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <FileText className="h-4 w-4 text-muted-foreground" />
