@@ -25,7 +25,8 @@ interface OrderFormProps {
 export function OrderForm({ medication, pharmacyPrice, pharmacyName, deliveryFee, onSuccess, onCancel }: OrderFormProps) {
   const [formData, setFormData] = useState({
     quantity: 1,
-    deliveryAddress: "",
+    deliveryAvenida: "",
+    deliveryCalle: "",
     deliveryInstructions: "",
     paymentMethod: "efectivo",
     prescriptionFile: null as File | null,
@@ -74,8 +75,14 @@ export function OrderForm({ medication, pharmacyPrice, pharmacyName, deliveryFee
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
 
-    if (!formData.deliveryAddress.trim()) {
-      newErrors.deliveryAddress = "La dirección de entrega es obligatoria"
+    const avenidaValue = Number.parseInt(formData.deliveryAvenida, 10)
+    if (!Number.isInteger(avenidaValue) || avenidaValue <= 0) {
+      newErrors.deliveryAvenida = "La avenida debe ser un número entero positivo"
+    }
+
+    const calleValue = Number.parseInt(formData.deliveryCalle, 10)
+    if (!Number.isInteger(calleValue) || calleValue <= 0) {
+      newErrors.deliveryCalle = "La calle debe ser un número entero positivo"
     }
 
     if (!formData.paymentMethod) {
@@ -116,11 +123,15 @@ export function OrderForm({ medication, pharmacyPrice, pharmacyName, deliveryFee
     setIsSubmitting(true)
 
     try {
+      const deliveryAvenidaValue = Number.parseInt(formData.deliveryAvenida, 10)
+      const deliveryCalleValue = Number.parseInt(formData.deliveryCalle, 10)
+      const formattedDeliveryAddress = `Avenida ${deliveryAvenidaValue}, Calle ${deliveryCalleValue}`
+
       const payload = {
         customerId: user.id,
         pharmacyId: pharmacyPrice.pharmacyId,
         pharmacyName,
-        deliveryAddress: formData.deliveryAddress,
+        deliveryAddress: formattedDeliveryAddress,
         deliveryInstructions: formData.deliveryInstructions || null,
         paymentMethod: formData.paymentMethod,
         insuranceUsed: userInsurance || "",
@@ -215,18 +226,40 @@ export function OrderForm({ medication, pharmacyPrice, pharmacyName, deliveryFee
       </div>
 
       {/* Dirección de entrega */}
-      <div className="space-y-2">
-        <Label htmlFor="deliveryAddress">
-          Dirección de entrega <span className="text-destructive">*</span>
-        </Label>
-        <Input
-          id="deliveryAddress"
-          placeholder="Calle, número, piso, depto"
-          value={formData.deliveryAddress}
-          onChange={(e) => setFormData({ ...formData, deliveryAddress: e.target.value })}
-          className={errors.deliveryAddress ? "border-destructive" : ""}
-        />
-        {errors.deliveryAddress && <p className="text-sm text-destructive">{errors.deliveryAddress}</p>}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="deliveryAvenida">
+            Avenida <span className="text-destructive">*</span>
+          </Label>
+          <Input
+            id="deliveryAvenida"
+            type="number"
+            min={1}
+            step={1}
+            placeholder="Ej: 1200"
+            value={formData.deliveryAvenida}
+            onChange={(e) => setFormData({ ...formData, deliveryAvenida: e.target.value })}
+            className={errors.deliveryAvenida ? "border-destructive" : ""}
+          />
+          {errors.deliveryAvenida && <p className="text-sm text-destructive">{errors.deliveryAvenida}</p>}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="deliveryCalle">
+            Calle <span className="text-destructive">*</span>
+          </Label>
+          <Input
+            id="deliveryCalle"
+            type="number"
+            min={1}
+            step={1}
+            placeholder="Ej: 800"
+            value={formData.deliveryCalle}
+            onChange={(e) => setFormData({ ...formData, deliveryCalle: e.target.value })}
+            className={errors.deliveryCalle ? "border-destructive" : ""}
+          />
+          {errors.deliveryCalle && <p className="text-sm text-destructive">{errors.deliveryCalle}</p>}
+        </div>
       </div>
 
       {/* Instrucciones de entrega */}
