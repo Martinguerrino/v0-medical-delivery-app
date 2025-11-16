@@ -3,6 +3,15 @@ import { userStatements } from "@/lib/database"
 import type { User } from "@/lib/types/user-types"
 
 const normalizeUser = (record: any): User => {
+  const toInteger = (value: unknown): number => {
+    if (typeof value === "number") {
+      return Number.isFinite(value) ? Math.trunc(value) : 0
+    }
+
+    const parsed = Number.parseInt(String(value ?? ""), 10)
+    return Number.isFinite(parsed) ? parsed : 0
+  }
+
   const baseFields = {
     id: record.id as string,
     email: record.email as string,
@@ -30,6 +39,8 @@ const normalizeUser = (record: any): User => {
       nombreFarmacia: (record.nombreFarmacia as string) ?? "",
       cuit: (record.cuit as string) ?? "",
       direccion: (record.direccion as string) ?? "",
+      avenida: toInteger(record.avenida),
+      calle: toInteger(record.calle),
       telefono: record.telefono ?? undefined,
       horarios: record.horarios ?? undefined,
     }

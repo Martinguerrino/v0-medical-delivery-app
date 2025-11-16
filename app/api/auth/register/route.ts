@@ -7,6 +7,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { role, ...userData } = body
 
+    const normalizeNumericField = (value: unknown) => {
+      const numericValue = typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10)
+      return Number.isFinite(numericValue) ? Math.trunc(numericValue) : NaN
+    }
+
     // Validate required fields
     if (!role || !userData.email || !userData.password) {
       return NextResponse.json(
@@ -14,6 +19,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    const typedRole = role as UserRole
 
     // Check if email already exists
     const existingUser = userStatements.getByEmail.get(userData.email)
@@ -25,15 +32,33 @@ export async function POST(request: NextRequest) {
     }
 
     // Create new user
-    const newUserId = `${role.toLowerCase()}-${Date.now()}`
+    const newUserId = `${typedRole.toLowerCase()}-${Date.now()}`
     const createdAt = new Date().toISOString()
+
+    let avenidaValue: number | null = null
+    let calleValue: number | null = null
+    let direccionValue: string | null = userData.direccion || null
+
+    if (typedRole === 'Farmacia') {
+      avenidaValue = normalizeNumericField(userData.avenida)
+      calleValue = normalizeNumericField(userData.calle)
+
+      if (!Number.isInteger(avenidaValue) || !Number.isInteger(calleValue)) {
+        return NextResponse.json(
+          { success: false, message: 'Avenida y Calle deben ser números enteros válidos' },
+          { status: 400 }
+        )
+      }
+
+      direccionValue = direccionValue ?? `Avenida ${avenidaValue}, Calle ${calleValue}`
+    }
 
     // Insert user into database
     userStatements.insert.run(
       newUserId,
       userData.email,
       userData.password,
-      role,
+      typedRole,
       userData.nombre || null,
       userData.esMayorDeEdad ? 1 : 0,
       userData.phone || null,
@@ -41,7 +66,9 @@ export async function POST(request: NextRequest) {
       userData.obraSocial || null,
       userData.nombreFarmacia || null,
       userData.cuit || null,
-      userData.direccion || null,
+      direccionValue,
+      avenidaValue,
+      calleValue,
       userData.telefono || null,
       userData.nombreCompleto || null,
       userData.dni || null,
@@ -54,7 +81,7 @@ export async function POST(request: NextRequest) {
       id: newUserId,
       email: userData.email,
       password: userData.password,
-      role: role,
+      role: typedRole,
       nombre: userData.nombre || null,
       esMayorDeEdad: userData.esMayorDeEdad || false,
       phone: userData.phone || null,
@@ -62,7 +89,9 @@ export async function POST(request: NextRequest) {
       obraSocial: userData.obraSocial || null,
       nombreFarmacia: userData.nombreFarmacia || null,
       cuit: userData.cuit || null,
-      direccion: userData.direccion || null,
+      direccion: direccionValue,
+      avenida: avenidaValue,
+      calle: calleValue,
       telefono: userData.telefono || null,
       nombreCompleto: userData.nombreCompleto || null,
       dni: userData.dni || null,

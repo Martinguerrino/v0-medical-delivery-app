@@ -24,6 +24,8 @@ db.exec(`
     nombreFarmacia TEXT,
     cuit TEXT,
     direccion TEXT,
+  avenida INTEGER,
+  calle INTEGER,
     telefono TEXT,
     nombreCompleto TEXT,
     dni TEXT,
@@ -247,6 +249,18 @@ try {
 }
 
 try {
+  db.exec(`ALTER TABLE users ADD COLUMN avenida INTEGER;`);
+} catch (error) {
+  // Column might already exist
+}
+
+try {
+  db.exec(`ALTER TABLE users ADD COLUMN calle INTEGER;`);
+} catch (error) {
+  // Column might already exist
+}
+
+try {
   db.exec(`ALTER TABLE orders ADD COLUMN customerId TEXT;`);
 } catch (error) {
   // Column might already exist
@@ -298,8 +312,8 @@ try {
 // Prepared statements for users
 export const userStatements = {
   insert: db.prepare(`
-    INSERT INTO users (id, email, password, role, nombre, esMayorDeEdad, phone, address, obraSocial, nombreFarmacia, cuit, direccion, telefono, nombreCompleto, dni, vehiculo, createdAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO users (id, email, password, role, nombre, esMayorDeEdad, phone, address, obraSocial, nombreFarmacia, cuit, direccion, avenida, calle, telefono, nombreCompleto, dni, vehiculo, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `),
   getByEmail: db.prepare('SELECT * FROM users WHERE email = ?'),
   getById: db.prepare('SELECT * FROM users WHERE id = ?'),
@@ -307,7 +321,7 @@ export const userStatements = {
   update: db.prepare(`
     UPDATE users SET
       email = ?, password = ?, role = ?, nombre = ?, esMayorDeEdad = ?, phone = ?, address = ?, obraSocial = ?,
-      nombreFarmacia = ?, cuit = ?, direccion = ?, telefono = ?, nombreCompleto = ?, dni = ?, vehiculo = ?, createdAt = ?
+      nombreFarmacia = ?, cuit = ?, direccion = ?, avenida = ?, calle = ?, telefono = ?, nombreCompleto = ?, dni = ?, vehiculo = ?, createdAt = ?
     WHERE id = ?
   `),
   delete: db.prepare('DELETE FROM users WHERE id = ?'),
@@ -599,7 +613,9 @@ export const migrateData = () => {
         user.obraSocial || null,
         user.nombreFarmacia || null,
         user.cuit || null,
-        user.direccion || null,
+  user.direccion || null,
+  (user as any).avenida ?? null,
+  (user as any).calle ?? null,
         user.telefono || null,
         user.nombreCompleto || null,
         user.dni || null,
@@ -873,6 +889,8 @@ export const migrateData = () => {
         user.nombreFarmacia || null,
         user.cuit || null,
         user.direccion || null,
+  (user as any).avenida ?? null,
+  (user as any).calle ?? null,
         user.telefono || null,
         user.nombreCompleto || null,
         user.dni || null,

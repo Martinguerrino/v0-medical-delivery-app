@@ -37,7 +37,8 @@ export function RegisterForm({ onToggleMode, onRegister }: RegisterFormProps) {
   const [farmaciaData, setFarmaciaData] = useState({
     nombreFarmacia: "",
     cuit: "",
-    direccion: "",
+    avenida: "",
+    calle: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -84,11 +85,21 @@ export function RegisterForm({ onToggleMode, onRegister }: RegisterFormProps) {
       password = farmaciaData.password
       confirmPassword = farmaciaData.confirmPassword
 
+      const avenidaValue = Number.parseInt(farmaciaData.avenida, 10)
+      const calleValue = Number.parseInt(farmaciaData.calle, 10)
+
+      if (!Number.isInteger(avenidaValue) || !Number.isInteger(calleValue)) {
+        setError("Debes ingresar valores numéricos válidos para Avenida y Calle")
+        setIsLoading(false)
+        return
+      }
+
       userData = {
         role: "Farmacia",
         nombreFarmacia: farmaciaData.nombreFarmacia,
         cuit: farmaciaData.cuit,
-        direccion: farmaciaData.direccion,
+        avenida: avenidaValue,
+        calle: calleValue,
         email: farmaciaData.email,
         password: farmaciaData.password,
       }
@@ -285,18 +296,39 @@ export function RegisterForm({ onToggleMode, onRegister }: RegisterFormProps) {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="farmacia-direccion">Dirección</Label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="farmacia-direccion"
-                    placeholder="Av. Corrientes 1500, CABA"
-                    value={farmaciaData.direccion}
-                    onChange={(e) => setFarmaciaData({ ...farmaciaData, direccion: e.target.value })}
-                    className="pl-10"
-                    required
-                  />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="farmacia-avenida">Número de Avenida</Label>
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="farmacia-avenida"
+                      type="number"
+                      inputMode="numeric"
+                      placeholder="1500"
+                      value={farmaciaData.avenida}
+                      onChange={(e) => setFarmaciaData({ ...farmaciaData, avenida: e.target.value })}
+                      className="pl-10"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="farmacia-calle">Número de Calle</Label>
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="farmacia-calle"
+                      type="number"
+                      inputMode="numeric"
+                      placeholder="800"
+                      value={farmaciaData.calle}
+                      onChange={(e) => setFarmaciaData({ ...farmaciaData, calle: e.target.value })}
+                      className="pl-10"
+                      required
+                    />
+                  </div>
                 </div>
               </div>
 

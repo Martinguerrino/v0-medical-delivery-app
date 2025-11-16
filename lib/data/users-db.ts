@@ -21,9 +21,9 @@ const usersDatabase: User[] = [
     role: "Farmacia",
     nombreFarmacia: "Farmacia del Centro",
     cuit: "30-12345678-9",
-    direccion: "Av. Corrientes 1500, CABA",
-    avenida: "Av. Corrientes",
-    calle: "CABA",
+    avenida: 1500,
+    calle: 800,
+    direccion: "Avenida 1500, Calle 800",
     telefono: "+54 11 4567-8900",
     createdAt: new Date().toISOString(),
   } as FarmaciaUser,
@@ -45,9 +45,9 @@ const usersDatabase: User[] = [
     role: "Farmacia",
     nombreFarmacia: "Farmacity",
     cuit: "30-12345678-1",
-    direccion: "Av. Santa Fe 1234, CABA",
-    avenida: "Av. Santa Fe",
-    calle: "CABA",
+    avenida: 1234,
+    calle: 600,
+    direccion: "Avenida 1234, Calle 600",
     telefono: "0800-333-2762",
     createdAt: new Date().toISOString(),
   } as FarmaciaUser,
@@ -58,9 +58,9 @@ const usersDatabase: User[] = [
     role: "Farmacia",
     nombreFarmacia: "Dr. Ahorro",
     cuit: "30-12345678-2",
-    direccion: "Av. Corrientes 2456, CABA",
-    avenida: "Av. Corrientes",
-    calle: "CABA",
+    avenida: 2456,
+    calle: 450,
+    direccion: "Avenida 2456, Calle 450",
     telefono: "0800-777-2467",
     createdAt: new Date().toISOString(),
   } as FarmaciaUser,
@@ -71,9 +71,9 @@ const usersDatabase: User[] = [
     role: "Farmacia",
     nombreFarmacia: "Farmacias del Dr. Simi",
     cuit: "30-12345678-3",
-    direccion: "Av. Rivadavia 3789, CABA",
-    avenida: "Av. Rivadavia",
-    calle: "CABA",
+    avenida: 3789,
+    calle: 320,
+    direccion: "Avenida 3789, Calle 320",
     telefono: "0800-444-7464",
     createdAt: new Date().toISOString(),
   } as FarmaciaUser,
@@ -84,9 +84,9 @@ const usersDatabase: User[] = [
     role: "Farmacia",
     nombreFarmacia: "Farmahorro",
     cuit: "30-12345678-4",
-    direccion: "Av. Cabildo 1567, CABA",
-    avenida: "Av. Cabildo",
-    calle: "CABA",
+    avenida: 1567,
+    calle: 510,
+    direccion: "Avenida 1567, Calle 510",
     telefono: "0800-555-3276",
     createdAt: new Date().toISOString(),
   } as FarmaciaUser,
@@ -97,9 +97,9 @@ const usersDatabase: User[] = [
     role: "Farmacia",
     nombreFarmacia: "Farmaplus",
     cuit: "30-12345678-5",
-    direccion: "Av. San Juan 2890, CABA",
-    avenida: "Av. San Juan",
-    calle: "CABA",
+    avenida: 2890,
+    calle: 275,
+    direccion: "Avenida 2890, Calle 275",
     telefono: "0800-666-7587",
     createdAt: new Date().toISOString(),
   } as FarmaciaUser,
@@ -123,6 +123,13 @@ export const registerUser = (
     id: `${userData.role.toLowerCase()}-${Date.now()}`,
     createdAt: new Date().toISOString(),
   } as User
+
+  if (newUser.role === "Farmacia") {
+    const farmaciaUser = newUser as FarmaciaUser
+    farmaciaUser.avenida = Math.trunc(farmaciaUser.avenida)
+    farmaciaUser.calle = Math.trunc(farmaciaUser.calle)
+    farmaciaUser.direccion = farmaciaUser.direccion || `Avenida ${farmaciaUser.avenida}, Calle ${farmaciaUser.calle}`
+  }
 
   usersDatabase.push(newUser)
 

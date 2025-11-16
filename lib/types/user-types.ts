@@ -22,6 +22,8 @@ export interface FarmaciaUser extends BaseUser {
   nombreFarmacia: string
   cuit: string
   direccion: string
+  avenida: number
+  calle: number
   telefono?: string
   horarios?: string
 }

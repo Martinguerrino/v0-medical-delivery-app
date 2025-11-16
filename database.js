@@ -21,6 +21,8 @@ db.exec(`
     nombreFarmacia TEXT,
     cuit TEXT,
     direccion TEXT,
+  avenida INTEGER,
+  calle INTEGER,
     telefono TEXT,
     nombreCompleto TEXT,
     dni TEXT,
@@ -218,11 +220,23 @@ try {
 catch (error) {
     // Column might already exist
 }
+try {
+  db.exec(`ALTER TABLE users ADD COLUMN avenida INTEGER;`);
+}
+catch (error) {
+  // Column might already exist
+}
+try {
+  db.exec(`ALTER TABLE users ADD COLUMN calle INTEGER;`);
+}
+catch (error) {
+  // Column might already exist
+}
 // Prepared statements for users
 export const userStatements = {
     insert: db.prepare(`
-    INSERT INTO users (id, email, password, role, nombre, esMayorDeEdad, phone, address, obraSocial, nombreFarmacia, cuit, direccion, telefono, nombreCompleto, dni, vehiculo, createdAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO users (id, email, password, role, nombre, esMayorDeEdad, phone, address, obraSocial, nombreFarmacia, cuit, direccion, avenida, calle, telefono, nombreCompleto, dni, vehiculo, createdAt)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `),
   getByEmail: db.prepare('SELECT * FROM users WHERE email = ?'),
   getById: db.prepare('SELECT * FROM users WHERE id = ?'),
@@ -230,7 +244,7 @@ export const userStatements = {
     update: db.prepare(`
     UPDATE users SET
       email = ?, password = ?, role = ?, nombre = ?, esMayorDeEdad = ?, phone = ?, address = ?, obraSocial = ?,
-      nombreFarmacia = ?, cuit = ?, direccion = ?, telefono = ?, nombreCompleto = ?, dni = ?, vehiculo = ?, createdAt = ?
+      nombreFarmacia = ?, cuit = ?, direccion = ?, avenida = ?, calle = ?, telefono = ?, nombreCompleto = ?, dni = ?, vehiculo = ?, createdAt = ?
     WHERE id = ?
   `),
     delete: db.prepare('DELETE FROM users WHERE id = ?'),
@@ -373,7 +387,7 @@ export const migrateData = () => {
     // Migrate users
     for (const user of usersDatabase) {
         try {
-            userStatements.insert.run(user.id, user.email, user.password, user.role, user.nombre || null, user.esMayorDeEdad ? 1 : 0, user.phone || null, user.address || null, user.obraSocial || null, user.nombreFarmacia || null, user.cuit || null, user.direccion || null, user.telefono || null, user.nombreCompleto || null, user.dni || null, user.vehiculo || null, user.createdAt);
+            userStatements.insert.run(user.id, user.email, user.password, user.role, user.nombre || null, user.esMayorDeEdad ? 1 : 0, user.phone || null, user.address || null, user.obraSocial || null, user.nombreFarmacia || null, user.cuit || null, user.direccion || null, user.avenida ?? null, user.calle ?? null, user.telefono || null, user.nombreCompleto || null, user.dni || null, user.vehiculo || null, user.createdAt);
         }
         catch (error) {
             console.log(`User ${user.id} already exists or error:`, error);
@@ -498,7 +512,7 @@ export const migrateData = () => {
     ];
     for (const user of testUsersData) {
         try {
-            userStatements.insert.run(user.id, user.email, user.password, user.role, user.nombre, user.esMayorDeEdad, user.phone, user.address, user.obraSocial, user.nombreFarmacia || null, user.cuit || null, user.direccion || null, user.telefono || null, user.nombreCompleto || null, user.dni || null, user.vehiculo || null, new Date().toISOString());
+            userStatements.insert.run(user.id, user.email, user.password, user.role, user.nombre, user.esMayorDeEdad, user.phone, user.address, user.obraSocial, user.nombreFarmacia || null, user.cuit || null, user.direccion || null, user.avenida ?? null, user.calle ?? null, user.telefono || null, user.nombreCompleto || null, user.dni || null, user.vehiculo || null, new Date().toISOString());
         }
         catch (error) {
             console.log(`Test user ${user.id} already exists or error:`, error);
