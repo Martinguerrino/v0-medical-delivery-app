@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -36,10 +36,60 @@ export function OrderForm({ medication, pharmacyPrice, pharmacyName, deliveryFee
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [uploadSuccess, setUploadSuccess] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [availableStock, setAvailableStock] = useState<number | null>(() => {
+    const initial = Number(pharmacyPrice.stock ?? 0)
+    if (!Number.isFinite(initial)) return null
+    return Math.max(0, Math.floor(initial))
+  })
+  const [isCheckingStock, setIsCheckingStock] = useState(false)
+  const [stockFetchError, setStockFetchError] = useState<string | null>(null)
   const { toast } = useToast()
 
   const user = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("user") || "{}") : {}
   const userInsurance = user.obraSocial || ""
+
+  const fetchCurrentStock = useCallback(async () => {
+    setIsCheckingStock(true)
+    setStockFetchError(null)
+    try {
+      const params = new URLSearchParams({ pharmacyId: pharmacyPrice.pharmacyId })
+      const response = await fetch(`/api/medications?${params.toString()}`, { cache: "no-store" })
+      if (!response.ok) {
+        throw new Error("No se pudo verificar el stock en tiempo real")
+      }
+
+      const payload = (await response.json().catch(() => null)) as unknown
+      const entries = Array.isArray(payload) ? payload : payload ? [payload] : []
+      const matchingEntry = entries.find((entry: any) => Number(entry.medicationId ?? entry.id) === medication.id)
+
+      if (!matchingEntry) {
+        setAvailableStock(0)
+        setStockFetchError("Este medicamento ya no está disponible en esta farmacia.")
+        return 0
+      }
+
+      const nextStock = Number(matchingEntry.stock ?? matchingEntry.inStock ?? 0)
+      const sanitized = Number.isFinite(nextStock) ? Math.max(0, Math.floor(nextStock)) : 0
+      setAvailableStock(sanitized)
+      setFormData((prev) => {
+        if (sanitized > 0 && prev.quantity > sanitized) {
+          return { ...prev, quantity: sanitized }
+        }
+        return prev
+      })
+      return sanitized
+    } catch (error) {
+      console.error("Error al consultar el stock actual", error)
+      setStockFetchError(error instanceof Error ? error.message : "No se pudo verificar el stock actual")
+      return null
+    } finally {
+      setIsCheckingStock(false)
+    }
+  }, [medication.id, pharmacyPrice.pharmacyId])
+
+  useEffect(() => {
+    fetchCurrentStock()
+  }, [fetchCurrentStock])
 
   const pharmacyCoordinate = useMemo(
     () => buildCoordinate(pharmacyPrice.pharmacyAvenida, pharmacyPrice.pharmacyCalle),
@@ -131,6 +181,10 @@ export function OrderForm({ medication, pharmacyPrice, pharmacyName, deliveryFee
 
     if (formData.quantity < 1) {
       newErrors.quantity = "La cantidad debe ser al menos 1"
+    } else if (availableStock !== null && availableStock <= 0) {
+      newErrors.quantity = "Este medicamento no tiene stock disponible"
+    } else if (availableStock !== null && formData.quantity > availableStock) {
+      newErrors.quantity = `Solo quedan ${availableStock} unidad${availableStock === 1 ? "" : "es"}`
     }
 
     setErrors(newErrors)
@@ -162,6 +216,32 @@ export function OrderForm({ medication, pharmacyPrice, pharmacyName, deliveryFee
       const deliveryAvenidaValue = Number.parseInt(formData.deliveryAvenida, 10)
       const deliveryCalleValue = Number.parseInt(formData.deliveryCalle, 10)
       const formattedDeliveryAddress = `Avenida ${deliveryAvenidaValue}, Calle ${deliveryCalleValue}`
+
+      const latestStock = await fetchCurrentStock()
+      if (latestStock === null) {
+        setSubmitError("No pudimos verificar el stock actual. Intenta nuevamente en unos segundos.")
+        setIsSubmitting(false)
+        return
+      }
+
+      if (latestStock <= 0) {
+        setErrors((prev) => ({
+          ...prev,
+          quantity: "Este medicamento ya no tiene stock disponible",
+        }))
+        setIsSubmitting(false)
+        return
+      }
+
+      if (formData.quantity > latestStock) {
+        setErrors((prev) => ({
+          ...prev,
+          quantity: `Solo quedan ${latestStock} unidad${latestStock === 1 ? "" : "es"}`,
+        }))
+        setFormData((prev) => ({ ...prev, quantity: Math.max(1, latestStock) }))
+        setIsSubmitting(false)
+        return
+      }
 
       const payload = {
         customerId: user.id,
@@ -203,7 +283,31 @@ export function OrderForm({ medication, pharmacyPrice, pharmacyName, deliveryFee
       })
 
       if (!response.ok) {
-        const errorData = (await response.json().catch(() => null)) as { error?: string } | null
+        const errorData = (await response.json().catch(() => null)) as { error?: string; availableStock?: number | null } | null
+        const backendStock =
+          typeof errorData?.availableStock === "number" && Number.isFinite(errorData.availableStock)
+            ? Math.max(0, Math.floor(errorData.availableStock))
+            : null
+
+        if (backendStock !== null) {
+          setAvailableStock(backendStock)
+          if (backendStock === 0) {
+            setErrors((prev) => ({
+              ...prev,
+              quantity: "Este medicamento ya no tiene stock disponible",
+            }))
+            setFormData((prev) => ({ ...prev, quantity: Math.max(1, prev.quantity) }))
+          } else if (formData.quantity > backendStock) {
+            setErrors((prev) => ({
+              ...prev,
+              quantity: `Solo quedan ${backendStock} unidad${backendStock === 1 ? "" : "es"}`,
+            }))
+            setFormData((prev) => ({ ...prev, quantity: Math.max(1, backendStock) }))
+          }
+        } else {
+          await fetchCurrentStock()
+        }
+
         const message = errorData?.error || "No se pudo crear el pedido"
         setSubmitError(message)
         toast({ title: "Error al crear el pedido", description: message })
@@ -251,6 +355,14 @@ export function OrderForm({ medication, pharmacyPrice, pharmacyName, deliveryFee
               <span className="font-medium text-foreground">Distancia estimada:</span> {deliveryQuote.distance.toFixed(2)} cuadras
             </p>
           )}
+          <p className="text-muted-foreground">
+            <span className="font-medium text-foreground">Stock actual:</span>{" "}
+            {isCheckingStock
+              ? "Verificando..."
+              : availableStock === null
+                  ? "No disponible"
+                  : `${availableStock} unidad${availableStock === 1 ? "" : "es"}`}
+          </p>
         </div>
       </div>
 
@@ -262,10 +374,24 @@ export function OrderForm({ medication, pharmacyPrice, pharmacyName, deliveryFee
           type="number"
           min="1"
           value={formData.quantity}
-          onChange={(e) => setFormData({ ...formData, quantity: Number.parseInt(e.target.value) || 1 })}
+          onChange={(e) => {
+            const raw = Number.parseInt(e.target.value, 10)
+            const sanitized = Number.isFinite(raw) && raw > 0 ? raw : 1
+            const limited =
+              availableStock !== null && availableStock > 0 ? Math.min(sanitized, availableStock) : sanitized
+            setFormData({ ...formData, quantity: limited })
+          }}
           className={errors.quantity ? "border-destructive" : ""}
         />
         {errors.quantity && <p className="text-sm text-destructive">{errors.quantity}</p>}
+        <p className="text-xs text-muted-foreground">
+          {isCheckingStock
+            ? "Verificando stock disponible..."
+            : availableStock === null
+                ? "No pudimos determinar el stock actual"
+                : `Stock disponible: ${availableStock} unidad${availableStock === 1 ? "" : "es"}`}
+        </p>
+        {stockFetchError && <p className="text-xs text-amber-600">{stockFetchError}</p>}
       </div>
 
       {/* Dirección de entrega */}
@@ -420,7 +546,15 @@ export function OrderForm({ medication, pharmacyPrice, pharmacyName, deliveryFee
         >
           Cancelar
         </Button>
-        <Button type="submit" className="flex-1 bg-primary text-primary-foreground" disabled={isSubmitting}>
+        <Button
+          type="submit"
+          className="flex-1 bg-primary text-primary-foreground"
+          disabled={
+            isSubmitting ||
+            isCheckingStock ||
+            (availableStock !== null && availableStock <= 0)
+          }
+        >
           {isSubmitting ? "Procesando..." : "Confirmar Pedido"}
         </Button>
       </div>

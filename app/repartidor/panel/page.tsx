@@ -431,9 +431,19 @@ export default function RepartidorPanelPage() {
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span>{order.items.length} producto{order.items.length === 1 ? "" : "s"}</span>
-                      <span className="font-semibold">{currencyFormatter.format(order.total)}</span>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span>Subtotal medicamentos</span>
+                          <span>{currencyFormatter.format(order.subtotal)}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-muted-foreground">
+                        <span>Envío</span>
+                        <span>{currencyFormatter.format(order.deliveryFee)}</span>
+                      </div>
+                      <div className="flex items-center justify-between font-semibold">
+                        <span>Total</span>
+                        <span>{currencyFormatter.format(order.total)}</span>
+                      </div>
                     </div>
                     <Button
                       className="mt-auto w-full"
@@ -514,9 +524,19 @@ export default function RepartidorPanelPage() {
                               </span>
                             </div>
                           )}
-                          <div className="flex items-center justify-between text-sm">
-                            <span>Total del pedido</span>
-                            <span className="font-semibold">{currencyFormatter.format(order.total)}</span>
+                          <div className="space-y-2 text-sm">
+                            <div className="flex items-center justify-between">
+                              <span>Subtotal medicamentos</span>
+                              <span>{currencyFormatter.format(order.subtotal)}</span>
+                            </div>
+                            <div className="flex items-center justify-between text-muted-foreground">
+                              <span>Envío</span>
+                              <span>{currencyFormatter.format(order.deliveryFee)}</span>
+                            </div>
+                            <div className="flex items-center justify-between font-semibold">
+                              <span>Total del pedido</span>
+                              <span>{currencyFormatter.format(order.total)}</span>
+                            </div>
                           </div>
                           <Button
                             className="mt-auto w-full"
@@ -552,6 +572,10 @@ export default function RepartidorPanelPage() {
                           <div className="flex items-center gap-2 text-muted-foreground">
                             <CheckCircle className="h-4 w-4" />
                             <span>Entregado el {formatDateTime(order.actualDelivery ?? order.updatedAt)}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span>Subtotal medicamentos</span>
+                            <span className="font-semibold">{currencyFormatter.format(order.subtotal)}</span>
                           </div>
                           <div className="flex items-center justify-between">
                             <span>Pago de envío</span>
