@@ -126,8 +126,8 @@ export const registerUser = (
 
   if (newUser.role === "Farmacia") {
     const farmaciaUser = newUser as FarmaciaUser
-    farmaciaUser.avenida = Math.trunc(farmaciaUser.avenida)
-    farmaciaUser.calle = Math.trunc(farmaciaUser.calle)
+    farmaciaUser.avenida = Math.max(1, Math.abs(Math.trunc(farmaciaUser.avenida)))
+    farmaciaUser.calle = Math.max(1, Math.abs(Math.trunc(farmaciaUser.calle)))
     farmaciaUser.direccion = farmaciaUser.direccion || `Avenida ${farmaciaUser.avenida}, Calle ${farmaciaUser.calle}`
   }
 

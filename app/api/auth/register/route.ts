@@ -43,9 +43,12 @@ export async function POST(request: NextRequest) {
       avenidaValue = normalizeNumericField(userData.avenida)
       calleValue = normalizeNumericField(userData.calle)
 
-      if (!Number.isInteger(avenidaValue) || !Number.isInteger(calleValue)) {
+      const isValidAvenida = Number.isInteger(avenidaValue) && avenidaValue > 0
+      const isValidCalle = Number.isInteger(calleValue) && calleValue > 0
+
+      if (!isValidAvenida || !isValidCalle) {
         return NextResponse.json(
-          { success: false, message: 'Avenida y Calle deben ser números enteros válidos' },
+          { success: false, message: 'Avenida y Calle deben ser números enteros positivos' },
           { status: 400 }
         )
       }

@@ -88,8 +88,11 @@ export function RegisterForm({ onToggleMode, onRegister }: RegisterFormProps) {
       const avenidaValue = Number.parseInt(farmaciaData.avenida, 10)
       const calleValue = Number.parseInt(farmaciaData.calle, 10)
 
-      if (!Number.isInteger(avenidaValue) || !Number.isInteger(calleValue)) {
-        setError("Debes ingresar valores numéricos válidos para Avenida y Calle")
+      const isValidAvenida = Number.isInteger(avenidaValue) && avenidaValue > 0
+      const isValidCalle = Number.isInteger(calleValue) && calleValue > 0
+
+      if (!isValidAvenida || !isValidCalle) {
+        setError("Avenida y Calle deben ser números enteros positivos")
         setIsLoading(false)
         return
       }
@@ -306,6 +309,8 @@ export function RegisterForm({ onToggleMode, onRegister }: RegisterFormProps) {
                       type="number"
                       inputMode="numeric"
                       placeholder="1500"
+                      min={1}
+                      step={1}
                       value={farmaciaData.avenida}
                       onChange={(e) => setFarmaciaData({ ...farmaciaData, avenida: e.target.value })}
                       className="pl-10"
@@ -323,6 +328,8 @@ export function RegisterForm({ onToggleMode, onRegister }: RegisterFormProps) {
                       type="number"
                       inputMode="numeric"
                       placeholder="800"
+                      min={1}
+                      step={1}
                       value={farmaciaData.calle}
                       onChange={(e) => setFarmaciaData({ ...farmaciaData, calle: e.target.value })}
                       className="pl-10"
